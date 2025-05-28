@@ -1,0 +1,12 @@
+/vendor
+.idea
+*.pem
+log/
+log/*
+*.log
+doc/
+doc/*
+note/
+note/*
+
+
