@@ -236,11 +236,7 @@ agent_types.extend(["AggregatorAgent"])
 pairwise = (len(agent_types), len(agent_types))
 
 model_args = {'connected': True,
-
-              # All in NYC.
-              # Only matters for evaluating "real world" protocol duration,
-              # not for accuracy, collusion, or reconstruction.
-              'min_latency': np.random.uniform(low=10000000, high=10000000, size=pairwise),
+              'min_latency': np.random.uniform(low=100000, high=100000, size=pairwise),
               'jitter': 0.3,
               'jitter_clip': 0.05,
               'jitter_unit': 5,
@@ -276,35 +272,3 @@ print("Client Agent mean time per iteration")
 print(f"    Seed sharing:         {results['seed sharing']:.6f}s")
 print(f"    Masked model generation:     {results['Masked model generation']:.6f}s")
 # print(f"    Report:     {results['report']:.6f}s")
-
-print()
-
-def td2s(x):
-    # 如果是Timedelta类型，转为秒，否则直接返回
-    return round(x.total_seconds(), 6) if hasattr(x, 'total_seconds') else round(float(x), 6)
-
-performance_data = {
-    '指标类型': ['服务端', '服务端', '服务端', '服务端', '客户端', '客户端'],
-    '步骤': ['Legal clients confirmation', 'Online clients confirmation', 
-           'Aggregate share reconstruction', 'Model aggregation',
-           'Seed sharing', 'Masked model generation'],
-    '平均时间(秒)': [
-        td2s(results['Legal clients confirmation']),
-        td2s(results['Online clients confirmation']),
-        td2s(results['Aggregate share reconstruction']),
-        td2s(results['Model aggregation']),
-        td2s(results['seed sharing']),
-        td2s(results['Masked model generation'])
-    ]
-}
-
-# 创建DataFrame
-df = pd.DataFrame(performance_data)
-
-# 生成文件名（使用命令行参数和prime位数）
-prime_info = param.prime_bits
-filename = f"performance_metrics_{args.config}_{num_clients}clients_{num_iterations}iterations{prime_info}parm{args.Dimension}commit{args.commit_size}.xlsx"
-
-# 保存到Excel文件
-df.to_excel(filename, index=False)
-print(f"\n性能指标已保存到文件: {filename}")

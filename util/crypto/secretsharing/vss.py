@@ -225,7 +225,8 @@ class VSS:
         """
         if len(shares) < 2:
             raise ValueError("至少需要2个份额才能重构秘密")
-            
+        
+        self.q = prime
         
         # 验证份额格式
         for share in shares:
