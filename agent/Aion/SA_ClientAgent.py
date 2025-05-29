@@ -109,6 +109,7 @@ class SA_ClientAgent(Agent):
             total_nodes=self.num_clients,
             f=self.num_clients // 3  # 假设最多容忍1/3的拜占庭节点
         )
+        self.shared_mask_count = 0
 
         # 统计各阶段时间
         self.timings = {
@@ -222,16 +223,13 @@ class SA_ClientAgent(Agent):
             msg (Message): The received message.
         """
         super().receiveMessage(currentTime, msg)
-
         if msg.body["msg"] == "request shares sum":
+            print(len(self.receive_mask_shares))
             if msg.body['iteration'] == self.current_iteration:
                 dt_protocol_start = pd.Timestamp('now')
                 self.reco_time = time.time()
                 sum_shares = self.get_sum_shares(msg.body['request id list'])
                 clt_comp_delay = pd.Timestamp('now') - dt_protocol_start
-
-                # print(f"Client {self.id} received request shares sum", sum_shares)
-
                 self.sendMessage(self.AggregatorAgentID,
                                  Message({"msg": "hprf_SUM_SHARES",
                                           "iteration": self.current_iteration,
@@ -298,7 +296,7 @@ class SA_ClientAgent(Agent):
             self.receive_mask_shares[sender_id] = temp_shared_mask
             self.mask_commitments[sender_id] = commitments
             # 检查是否收到足够的份额
-            if len(self.receive_mask_shares) >= self.num_clients//3 and self.flag == 0:
+            if len(self.receive_mask_shares) == self.num_clients:
                 vss_start_time = time.time()
                 self.flag = 1
                 shares = list(self.receive_mask_shares.values())
@@ -356,10 +354,11 @@ class SA_ClientAgent(Agent):
         
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
-        filename = r"agent\\HPRF\\matrix"
+        filename = r"matrix"
         shprg = SHPRG(n, m, p, q, filename)
 
         mask_vector = shprg.hprf(self.mask_seed, self.current_iteration, self.vector_len)
+
         mask_vector = np.array(mask_vector, dtype=np.uint32)
 
         vec = np.ones(self.vector_len, dtype=self.vector_dtype)

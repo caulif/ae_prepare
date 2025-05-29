@@ -184,11 +184,46 @@ def load_initialization_values(filename):
     
 
 if __name__ == "__main__":
-    initialization_values_filename = r"initialization_values"
+    initialization_values_filename = r"agent\\HPRF\\initialization_values"
     n, m, p, q = load_initialization_values(initialization_values_filename)
     filename = r"matrix"
     shprg = SHPRG(n, m, p, q, filename)
-    vector_len = 100000000
-    seed_sum = 10
-    seed_sum_hprf = shprg.hprf(seed_sum, 1, vector_len)
-    print(seed_sum_hprf)
+    
+    # 测试参数
+    vector_len = 100  # 向量长度
+    value = 10       # 每个向量的值
+    num_vectors = 204  # 向量数量
+    
+    print("【测试1：先hprf再相加】")
+    # 对每个值进行hprf
+    hprf_results = []
+    for i in range(num_vectors):
+        result = shprg.hprf(10, 1, vector_len)
+        print(result[0])
+        hprf_results.append(result)
+    
+    # 将结果相加
+    sum_after_hprf = [0] * vector_len
+    for result in hprf_results:
+        for i in range(vector_len):
+            sum_after_hprf[i] = (sum_after_hprf[i] + result[i]) % p
+
+    
+    print(f"先hprf再相加的结果（前5个值）: {sum_after_hprf[:5]}")
+    
+    print("\n【测试2：先相加再hprf】")
+    # 先计算总和
+    total_sum = (value * num_vectors) % q
+    # 对总和进行hprf
+    hprf_after_sum = shprg.hprf(total_sum, 1, vector_len)
+    
+    print(f"先相加再hprf的结果（前5个值）: {hprf_after_sum[:5]}")
+    
+    # # 比较两种方式的结果
+    # print("\n【结果比较】")
+    # print(f"两种方式结果是否相同: {sum_after_hprf == hprf_after_sum}")
+    # if sum_after_hprf != hprf_after_sum:
+    #     print("不同位置的值：")
+    #     for i in range(vector_len):
+    #         if sum_after_hprf[i] != hprf_after_sum[i]:
+    #             print(f"位置 {i}: 方式1={sum_after_hprf[i]}, 方式2={hprf_after_sum[i]}")

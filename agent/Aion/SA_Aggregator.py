@@ -122,6 +122,7 @@ class SA_AggregatorAgent(Agent):
         self.linf_shprg_old = 0.05
         self.b_old = 0.2
 
+        self.hprf_prime = 0
         # Accumulated time
         self.elapsed_time = {
             'REPORT': pd.Timedelta(0),
@@ -466,12 +467,16 @@ class SA_AggregatorAgent(Agent):
         self.selected_indices, self.b_old = self.MMF(self.user_masked_vectors, self.l2_old, self.linf_old,
                                                      self.linf_shprg_old, self.b_old,
                                                      self.current_iteration)
+        initialization_values_filename = r"agent\\HPRF\\initialization_values"
+        n, m, p, q = load_initialization_values(initialization_values_filename)
+        self.hprf_prime = p
 
         self.vec_sum_partial = np.zeros(self.vector_len, np.int64)
         for id in self.selected_indices:
             if len(self.user_masked_vectors[id]) != self.vector_len:
                 raise RuntimeError("Client sent a vector with an incorrect length.")
-            self.vec_sum_partial += self.user_masked_vectors[id]
+            self.vec_sum_partial += self.user_masked_vectors[id] 
+            self.vec_sum_partial %= self.hprf_prime
             # self.vec_sum_partial %= self.prime
 
     def report_send_message(self):
@@ -522,10 +527,7 @@ class SA_AggregatorAgent(Agent):
         dt_protocol_start = pd.Timestamp('now')
         self.reco_time = time.time()
 
-        # 尝试读取份额，如果不够则等待下次唤醒
-        if not self.reconstruction_read_from_pool():
-            return
-
+        self.reconstruction_read_from_pool()
         self.reconstruction_process()
         self.reconstruction_clear_pool()
         self.reconstruction_send_message()
@@ -549,28 +551,11 @@ class SA_AggregatorAgent(Agent):
 
     def reconstruction_read_from_pool(self):
         """Reads decryption shares from the receiving pool."""
-        if len(self.recv_committee_shares_sum) < self.committee_threshold:
-            # 记录缺失的份额
-            missing_shares = set(self.selected_indices) - set(self.recv_committee_shares_sum.keys())
-            if missing_shares:
-                self.agent_print(f"Missing shares from clients: {missing_shares}")
-                # 重新请求缺失的份额
-                for id in self.user_committee:
-                    self.sendMessage(id,
-                                    Message({"msg": "request shares sum",
-                                            "iteration": self.current_iteration,
-                                            "request id list": list(missing_shares),
-                                            }),
-                                    tag="comm_sign_server",
-                                    msg_name=self.msg_name)
-            
-            # 设置2秒后重新唤醒
-            self.setWakeup(pd.Timestamp('now') + pd.Timedelta('2s'))
-            return False
-            
+        while len(self.recv_committee_shares_sum) < self.committee_threshold:
+            time.sleep(0.01)
+
         self.committee_shares_sum = self.recv_committee_shares_sum
         self.recv_committee_shares_sum = {}
-        return True
 
     def reconstruction_clear_pool(self):
         """Clears all message pools."""
@@ -592,33 +577,22 @@ class SA_AggregatorAgent(Agent):
         
         # 1. 从委员会成员发送的相加后的份额中恢复出种子和
         committee_shares = list(self.committee_shares_sum.values())
-        print("委员会成员发送的相加后的份额:", committee_shares)
-        
-        # 将份额转换为(index, value, blinding)格式
-        valid_shares = []
-        for share in committee_shares[:self.committee_threshold]:
-            if isinstance(share, list) and len(share) == 1 and isinstance(share[0], tuple) and len(share[0]) >= 2:
-                # 添加一个默认的blinding值0
-                valid_shares.append((share[0][0], share[0][1], 0))
-            else:
-                self.agent_print(f"Invalid share format: {share}")
-                continue
-                
-        if len(valid_shares) < self.committee_threshold:
-            raise RuntimeError("Not enough valid shares for reconstruction")
-            
-        self.seed_sum = self.vss.reconstruct(valid_shares, self.prime)
-        print(f"恢复出的种子和: {self.seed_sum}")
+        # print("委员会成员发送的相加后的份额:", committee_shares)
+        self.seed_sum = self.vss.reconstruct(committee_shares, self.prime)
+        # print(f"恢复出的种子和: {self.seed_sum}")
         
         # 2. 使用恢复出的种子生成掩码向量
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
-        filename = r"agent\\HPRF\\matrix"
+        filename = r"matrix"
         shprg = SHPRG(n, m, p, q, filename)
         self.seed_sum_hprf = shprg.hprf(self.seed_sum, self.current_iteration, self.vector_len)
-        
+        print("self.seed_sum_hprf", self.seed_sum_hprf[0])
         self.final_sum = self.vec_sum_partial - self.seed_sum_hprf
+        self.final_sum %= self.hprf_prime
+        # print("final_sum", self.final_sum)
         self.final_sum //= len(self.selected_indices)
+        print("final_sum", self.final_sum)
         self.final_sum = np.array(self.final_sum, dtype=np.uint32)
 
         self.l2_old = [np.linalg.norm(self.final_sum)] + self.l2_old[:1]
@@ -764,15 +738,6 @@ class SA_AggregatorAgent(Agent):
             
         # 检查是否收到足够的份额
         if len(self.recv_shared_masks) >= self.committee_threshold:
-            # 等待一段时间，确保收到所有份额
-            wait_start = time.time()
-            while time.time() - wait_start < 2.0:  # 等待最多2秒
-                if len(self.recv_shared_masks) == len(self.selected_indices):
-                    break
-                time.sleep(0.1)  # 每0.1秒检查一次
-            
-            self.agent_print(f"Committee member {self.id} received {len(self.recv_shared_masks)} shares out of {len(self.selected_indices)}")
-            
             # 将收到的所有份额相加
             combined_share = None
             for share in self.recv_shared_masks.values():

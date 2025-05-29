@@ -85,7 +85,7 @@ class VSS:
             prime = get_large_enough_prime([secret, num_shares])
             if prime is None:
                 raise ValueError("Error! Secret is too long for share calculation!")
-        
+        self.q = prime
         # 确保secret在q范围内
         secret = secret % self.q
         
@@ -214,7 +214,8 @@ class VSS:
         Reconstruct the secret from shares.
         
         Args:
-            shares: List of shares in the format [(share_index, share_value, blinding_value)].
+            shares: List of shares in the format [(share_index, share_value, blinding_value)] or [(share_index, share_value)].
+                   Also supports nested list format [[(index, value)]] or [[(index, value, blinding)]].
             prime: Prime number for the field.
             
         Returns:
@@ -228,20 +229,27 @@ class VSS:
         
         self.q = prime
         
-        # 验证份额格式
+        # 处理嵌套列表格式
+        if isinstance(shares[0], list):
+            shares = [share[0] for share in shares]
+        
+        # 兼容2元组和3元组份额
+        normalized_shares = []
         for share in shares:
-            if len(share) != 3:
-                # 填补一个元素，使得长度为3
-                
-                raise ValueError("Invalid share format: must be (index, value, blinding)")
+            if len(share) == 2:
+                # 自动补0作为blinding
+                share = (share[0], share[1], 0)
+            elif len(share) != 3:
+                raise ValueError("Invalid share format: must be (index, value) 或 (index, value, blinding)")
             if not all(isinstance(x, int) for x in share):
                 raise ValueError("Share components must be integers")
+            normalized_shares.append(share)
         
         # 使用拉格朗日插值重构秘密（在q上）
         secret = 0
-        for i, (x_i, y_i, _) in enumerate(shares):
+        for i, (x_i, y_i, _) in enumerate(normalized_shares):
             numerator = denominator = 1
-            for j, (x_j, _, _) in enumerate(shares):
+            for j, (x_j, _, _) in enumerate(normalized_shares):
                 if i != j:
                     numerator = (numerator * (-x_j)) % self.q
                     denominator = (denominator * (x_i - x_j)) % self.q
@@ -482,13 +490,14 @@ if __name__ == "__main__":
     
     # 测试参数
     num_values = 5      # 值的数量
-    num_shares = 5      # 份额数量
-    threshold = 3       # 阈值
-    prime = vss.q       # 使用q作为prime
+    num_shares = 4     # 份额数量
+    threshold = 2       # 阈值
+    prime = 1111     # 使用q作为prime
     
     # 生成多个随机值
     # values = [random.randint(0, 1000) for _ in range(num_values)]
-    values = [10, 10, 10, 10, 10]
+    # values = 256个1
+    values = [10] * 256
     print(f"原始值: {values}")
     print(f"原始值的和: {sum(values)}")
     
