@@ -295,47 +295,27 @@ class SA_ClientAgent(Agent):
             # 存储份额和承诺
             self.receive_mask_shares[sender_id] = temp_shared_mask
             self.mask_commitments[sender_id] = commitments
-            # 检查是否收到足够的份额
+            
+            # 检查是否收集到所有份额
             if len(self.receive_mask_shares) == self.num_clients:
-                vss_start_time = time.time()
-                self.flag = 1
+                # 使用同态性质验证所有份额
                 shares = list(self.receive_mask_shares.values())
                 all_commitments = list(self.mask_commitments.values())
-
-                # ----------- 利用同态性批量验证 -----------
-                # 计算所有份额的f、r累加
-                total_f = 0
-                total_r = 0
-                for share in shares:
-                    # 修改这里的解包方式
-                    if isinstance(share, tuple) and len(share) == 3:
-                        _, f_x, r_x = share
-                        total_f = (total_f + f_x) % self.vss.q
-                        total_r = (total_r + r_x) % self.vss.q
-                    else:
-                        self.agent_print(f"Invalid share format: {share}")
-                        continue
-
-                # 计算所有commitments的乘积
-                C_mul = 1
-                for cmt in all_commitments:
-                    for c in cmt:
-                        C_mul = (C_mul * c) % self.vss.p
-
-                # 计算 g^total_f * h^total_r mod p
-                C_sum = (gmpy2.powmod(self.vss.g, total_f, self.vss.p) * 
-                        gmpy2.powmod(self.vss.h, total_r, self.vss.p)) % self.vss.p
-
-                # # 验证同态性质
-                # if C_mul == C_sum:
-                #     self.agent_print("All shares verified successfully in batch (homomorphic)")
-                # else:
-                #     self.agent_print("Invalid shares detected in batch verification (homomorphic)")
                 
-                # self.timings["Seed sharing"][0] += (time.time() - vss_start_time)
+                # 使用批量验证方法
+                is_valid = self.vss.verify_shares_batch(shares, all_commitments[0], self.prime)
+                
+                if is_valid:
+                    # self.agent_print(f"Client {self.id}: 份额验证成功")
+                    pass
+                else:
+                    # self.agent_print(f"Client {self.id}: 份额验证失败")
+                    # 异常抛出
+                    raise Exception("份额验证失败")
+                    # 可以在这里添加错误处理逻辑
+                
+                self.timings["Seed sharing"][0] += (time.time() - vss_start_time)
 
-        else:
-            self.agent_print(f"Unknown message type: {msg.body['msg']}")
 
     def sendVectors(self, currentTime):
         """

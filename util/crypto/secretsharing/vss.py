@@ -182,29 +182,29 @@ class VSS:
             if not shares or not commitments:
                 return False
                 
-            # 计算所有份额的乘积
-            total_f = 0
-            total_r = 0
+            # 计算所有份额的承诺
+            C_total = 1
             for x, f_x, r_x in shares:
                 # 确保值在q范围内
                 f_x = f_x % self.q
                 r_x = r_x % self.q
-                total_f = (total_f + f_x) % self.q
-                total_r = (total_r + r_x) % self.q
+                # 计算单个份额的承诺
+                C_i = (pow(self.g, f_x, self.p) * pow(self.h, r_x, self.p)) % self.p
+                # 累乘所有承诺
+                C_total = (C_total * C_i) % self.p
             
-            # 计算 g^total_f * h^total_r mod p
-            left = (pow(self.g, total_f, self.p) * pow(self.h, total_r, self.p)) % self.p
+            # 计算所有份额值的和
+            sum_f = 0
+            sum_r = 0
+            for _, f_x, r_x in shares:
+                sum_f = (sum_f + f_x) % self.q
+                sum_r = (sum_r + r_x) % self.q
             
-            # 计算所有承诺的乘积
-            right = 1
-            for j, Cj in enumerate(commitments):
-                # 计算所有份额的x^j的和
-                x_pow_sum = 0
-                for x, _, _ in shares:
-                    x_pow_sum = (x_pow_sum + pow(x, j, self.q)) % self.q
-                right = (right * pow(Cj, x_pow_sum, self.p)) % self.p
+            # 使用同态性质计算总承诺
+            C_sum = (pow(self.g, sum_f, self.p) * pow(self.h, sum_r, self.p)) % self.p
             
-            return left == right
+            # 验证两个结果是否相等
+            return C_total == C_sum
             
         except Exception as e:
             return False
@@ -368,20 +368,20 @@ if __name__ == "__main__":
     
     
     # Test Pedersen commitment homomorphism
-    # print("\n【Pedersen承诺同态性质测试】")
-    # s1 = random.randrange(0, vss.q)
-    # s2 = random.randrange(0, vss.q)
-    # r1 = random.randrange(0, vss.q)
-    # r2 = random.randrange(0, vss.q)
-    # C1 = (pow(vss.g, s1, vss.p) * pow(vss.h, r1, vss.p)) % vss.p
-    # C2 = (pow(vss.g, s2, vss.p) * pow(vss.h, r2, vss.p)) % vss.p
-    # C_mul = (C1 * C2) % vss.p
-    # C_sum = (pow(vss.g, (s1 + s2) % vss.q, vss.p) * pow(vss.h, (r1 + r2) % vss.q, vss.p)) % vss.p
-    # print(f"C1 = g^s1 h^r1 mod p = {C1}")
-    # print(f"C2 = g^s2 h^r2 mod p = {C2}")
-    # print(f"C1 * C2 mod p = {C_mul}")
-    # print(f"g^(s1+s2) h^(r1+r2) mod p = {C_sum}")
-    # print(f"同态性质验证: {C_mul == C_sum}")
+    print("\n【Pedersen承诺同态性质测试】")
+    s1 = random.randrange(0, vss.q)
+    s2 = random.randrange(0, vss.q)
+    r1 = random.randrange(0, vss.q)
+    r2 = random.randrange(0, vss.q)
+    C1 = (pow(vss.g, s1, vss.p) * pow(vss.h, r1, vss.p)) % vss.p
+    C2 = (pow(vss.g, s2, vss.p) * pow(vss.h, r2, vss.p)) % vss.p
+    C_mul = (C1 * C2) % vss.p
+    C_sum = (pow(vss.g, (s1 + s2) % vss.q, vss.p) * pow(vss.h, (r1 + r2) % vss.q, vss.p)) % vss.p
+    print(f"C1 = g^s1 h^r1 mod p = {C1}")
+    print(f"C2 = g^s2 h^r2 mod p = {C2}")
+    print(f"C1 * C2 mod p = {C_mul}")
+    print(f"g^(s1+s2) h^(r1+r2) mod p = {C_sum}")
+    print(f"同态性质验证: {C_mul == C_sum}")
 
     # 性能测试
     # print("\n【VSS性能测试】")

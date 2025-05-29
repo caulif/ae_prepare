@@ -436,7 +436,7 @@ class SA_AggregatorAgent(Agent):
         # 记录在线客户端确认时间
         self.timings["Online clients confirmation"].append(bft_time)
 
-        self.report_send_message()
+        # self.report_send_message()
 
         # 记录掩码模型生成时间
         # self.timings["Masked model generation"].append(compute_time)
@@ -479,16 +479,16 @@ class SA_AggregatorAgent(Agent):
             self.vec_sum_partial %= self.hprf_prime
             # self.vec_sum_partial %= self.prime
 
-    def report_send_message(self):
-        """Sends decryption requests to committee members."""
-        for id in self.user_committee:
-            self.sendMessage(id,
-                             Message({"msg": "SIGN",
-                                      "iteration": self.current_iteration,
-                                      "client_id_list": self.client_id_list,
-                                      }),
-                             tag="comm_dec_server",
-                             msg_name=self.msg_name)
+    # def report_send_message(self):
+        # """Sends decryption requests to committee members."""
+        # for id in self.user_committee:
+        #     self.sendMessage(id,
+        #                      Message({"msg": "SIGN",
+        #                               "iteration": self.current_iteration,
+        #                               "client_id_list": self.client_id_list,
+        #                               }),
+        #                      tag="comm_dec_server",
+        #                      msg_name=self.msg_name)
 
     def forward_signatures(self, currentTime):
         """
