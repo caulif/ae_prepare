@@ -94,7 +94,7 @@ class Agent:
             self.writeLog(dfLog)
             
         # 保存统计数据到文件
-        self.save_stats_to_file()
+        # self.save_stats_to_file()
 
     ### Methods for internal use by agents (e.g. bookkeeping).
 
@@ -146,61 +146,61 @@ class Agent:
     ### not typically wish to request additional delay.
     def sendMessage(self, recipientID, msg, delay=0, tag="communication", msg_name=None):
         # 消息阶段分类
-        message_type = None
-        sender_type = "Server" if self.type == "AggregatorAgent" else "Client"
+        # message_type = None
+        # sender_type = "Server" if self.type == "AggregatorAgent" else "Client"
         
-        if msg.body['msg'] == "SHARED_MASK":
-            message_type = "Seed sharing"
-        elif msg.body['msg'] == "VECTOR":
-            message_type = "Masked model upload"
-        elif msg.body['msg'] == "request shares sum":
-            message_type = "Model aggregation and mask removal"
-        elif msg.body['msg'] == "hprf_SUM_SHARES":
-            message_type = "Model aggregation and mask removal"
-        elif msg.body['msg'] == "ONLINE_CLIENTS":
-            message_type = "Online clients confirmation"
-        elif msg.body['msg'] == "FINAL_SUM":
-            message_type = "Model aggregation and mask removal"
-        elif msg.body['msg'] == "BFT_SIGN_ONLINE":
-            message_type = "Online clients confirmation"
-        elif msg.body['msg'] == "BFT_SIGN_FINAL":
-            message_type = "Model aggregation and mask removal"
-        elif msg.body['msg'] == "BFT_SIGN_LEGAL":
-            message_type = "Legal clients confirmation"
-        elif msg.body['msg'] == "BFT_RESPONSE_ONLINE":
-            message_type = "Online clients confirmation"
-        elif msg.body['msg'] == "BFT_RESPONSE_FINAL":
-            message_type = "Model aggregation and mask removal"
-        elif msg.body['msg'] == "BFT_RESPONSE_LEGAL":
-            message_type = "Legal clients confirmation"
-        elif msg.body['msg'] == "REQ":
-            message_type = "Model aggregation and mask removal"
-        elif msg.body['msg'] == "SIGN":
-            message_type = "Legal clients confirmation"
-        elif msg.body['msg'] == "MASK_COMMITMENTS":
-            message_type = "Seed sharing"
-        elif msg.body['msg'] == "VIEW_CHANGE":
-            message_type = "Legal clients confirmation"
-        else:
-            message_type = "UNKNOWN"
+        # if msg.body['msg'] == "SHARED_MASK":
+        #     message_type = "Seed sharing"
+        # elif msg.body['msg'] == "VECTOR":
+        #     message_type = "Masked model upload"
+        # elif msg.body['msg'] == "request shares sum":
+        #     message_type = "Model aggregation and mask removal"
+        # elif msg.body['msg'] == "hprf_SUM_SHARES":
+        #     message_type = "Model aggregation and mask removal"
+        # elif msg.body['msg'] == "ONLINE_CLIENTS":
+        #     message_type = "Online clients confirmation"
+        # elif msg.body['msg'] == "FINAL_SUM":
+        #     message_type = "Model aggregation and mask removal"
+        # elif msg.body['msg'] == "BFT_SIGN_ONLINE":
+        #     message_type = "Online clients confirmation"
+        # elif msg.body['msg'] == "BFT_SIGN_FINAL":
+        #     message_type = "Model aggregation and mask removal"
+        # elif msg.body['msg'] == "BFT_SIGN_LEGAL":
+        #     message_type = "Legal clients confirmation"
+        # elif msg.body['msg'] == "BFT_RESPONSE_ONLINE":
+        #     message_type = "Online clients confirmation"
+        # elif msg.body['msg'] == "BFT_RESPONSE_FINAL":
+        #     message_type = "Model aggregation and mask removal"
+        # elif msg.body['msg'] == "BFT_RESPONSE_LEGAL":
+        #     message_type = "Legal clients confirmation"
+        # elif msg.body['msg'] == "REQ":
+        #     message_type = "Model aggregation and mask removal"
+        # elif msg.body['msg'] == "SIGN":
+        #     message_type = "Legal clients confirmation"
+        # elif msg.body['msg'] == "MASK_COMMITMENTS":
+        #     message_type = "Seed sharing"
+        # elif msg.body['msg'] == "VIEW_CHANGE":
+        #     message_type = "Legal clients confirmation"
+        # else:
+        #     message_type = "UNKNOWN"
 
-        # 计算消息大小
-        message_size = 0
-        if hasattr(msg, 'body'):
-            for content in msg.body:
-                if content == "masked_vector":
-                    continue
-                message_size += sys.getsizeof(msg.body[content])
+        # # 计算消息大小
+        # message_size = 0
+        # if hasattr(msg, 'body'):
+        #     for content in msg.body:
+        #         if content == "masked_vector":
+        #             continue
+        #         message_size += sys.getsizeof(msg.body[content])
 
-        # 将统计信息添加到内存中的DataFrame
-        if message_type:
-            new_row = pd.DataFrame({
-                'Stage': [message_type],
-                'Sender': [sender_type],
-                'Message Type': [msg.body['msg']],
-                'Size (bytes)': [message_size]
-            })
-            Agent._stats_df = pd.concat([Agent._stats_df, new_row], ignore_index=True)
+        # # 将统计信息添加到内存中的DataFrame
+        # if message_type:
+        #     new_row = pd.DataFrame({
+        #         'Stage': [message_type],
+        #         'Sender': [sender_type],
+        #         'Message Type': [msg.body['msg']],
+        #         'Size (bytes)': [message_size]
+        #     })
+        #     Agent._stats_df = pd.concat([Agent._stats_df, new_row], ignore_index=True)
 
         self.kernel.sendMessage(self.id, recipientID, msg, delay=delay, tag=tag)
 
@@ -241,39 +241,5 @@ class Agent:
         return ("{}".format(self.id) <
                 "{}".format(other.id))
 
-    @classmethod
-    def save_stats_to_file(cls):
-        """保存统计数据到文件"""
-        try:
-            # 保存详细统计
-            # cls._stats_df.to_excel(cls._stats_filename, index=False, engine='openpyxl')
-            
-            # 计算并保存汇总统计
-            # 1. 客户端统计
-            client_stats = cls._stats_df[cls._stats_df['Sender'] == 'Client'].groupby('Stage')['Size (bytes)'].sum().reset_index()
-            client_stats['Sender'] = 'Client'
-            
-            # 2. 服务器统计
-            server_stats = cls._stats_df[cls._stats_df['Sender'] == 'Server'].groupby('Stage')['Size (bytes)'].sum().reset_index()
-            server_stats['Sender'] = 'Server'
-            
-            # 3. 每个阶段的总统计
-            stage_totals = cls._stats_df.groupby('Stage')['Size (bytes)'].sum().reset_index()
-            stage_totals['Sender'] = 'Total'
-            
-            # 4. 总计行
-            grand_total = pd.DataFrame({
-                'Stage': ['Total'],
-                'Sender': ['Total'],
-                'Size (bytes)': [cls._stats_df['Size (bytes)'].sum()]
-            })
-            
-            # 合并所有统计结果
-            summary = pd.concat([client_stats, server_stats, stage_totals, grand_total], ignore_index=True)
-            
-            # 保存汇总统计
-            summary.to_excel(cls._summary_filename, index=False, engine='openpyxl')
-            
-        except Exception as e:
-            log_print("保存统计数据失败: {}", str(e))
+   
 

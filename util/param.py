@@ -16,8 +16,9 @@ fraction = 1 / 3
 fixed_key = b"abcd"
 
 prime_bits = 2048
-prime = sympy.randprime(2 ** (prime_bits - 1), 2 ** prime_bits)  # Generate a large prime number
+# prime = sympy.randprime(2 ** (prime_bits - 1), 2 ** prime_bits)  # Generate a large prime number
 # prime = 527921
+prime = 1111
 
 wt_Aion_report = pd.Timedelta('10s')
 wt_Aion_crosscheck = pd.Timedelta('3s')

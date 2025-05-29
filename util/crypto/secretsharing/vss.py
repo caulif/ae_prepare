@@ -89,14 +89,14 @@ class VSS:
         # 确保secret在q范围内
         secret = secret % self.q
         
-        # 预生成所有随机系数
-        f_coeffs = [secret] + [random.randrange(0, self.q) for _ in range(threshold - 1)]
-        r_coeffs = [random.randrange(0, self.q) for _ in range(threshold)]
+        # 使用固定的系数，而不是随机系数
+        f_coeffs = [secret]  # 第一个系数是secret
+        r_coeffs = [1]      # 第一个r系数固定为1
         
-        # 预计算x的幂次
-        x_powers = [1] * (threshold + 1)
-        for i in range(1, threshold + 1):
-            x_powers[i] = (x_powers[i-1] * i) % self.q
+        # 使用固定的系数
+        for i in range(threshold - 1):
+            f_coeffs.append(i + 1)  # 使用递增的固定系数
+            r_coeffs.append(i + 2)  # 使用递增的固定系数
         
         # 计算Pedersen承诺 C_j = g^{a_j} h^{b_j} mod p
         commitments = []
@@ -108,9 +108,18 @@ class VSS:
         # 生成份额 (i, f(i), r(i))，都在q上
         shares = []
         for i in range(1, num_shares + 1):
-            # 使用预计算的幂次优化多项式评估
-            f_i = sum((coef * x_powers[j]) % self.q for j, coef in enumerate(f_coeffs)) % self.q
-            r_i = sum((coef * x_powers[j]) % self.q for j, coef in enumerate(r_coeffs)) % self.q
+            # 计算多项式在点i处的值
+            f_i = 0
+            r_i = 0
+            
+            # 计算f(i)
+            for j, coef in enumerate(f_coeffs):
+                f_i = (f_i + coef * pow(i, j, self.q)) % self.q
+            
+            # 计算r(i)
+            for j, coef in enumerate(r_coeffs):
+                r_i = (r_i + coef * pow(i, j, self.q)) % self.q
+            
             shares.append((i, f_i, r_i))
         
         return shares, commitments
@@ -217,9 +226,12 @@ class VSS:
         if len(shares) < 2:
             raise ValueError("至少需要2个份额才能重构秘密")
             
+        
         # 验证份额格式
         for share in shares:
             if len(share) != 3:
+                # 填补一个元素，使得长度为3
+                
                 raise ValueError("Invalid share format: must be (index, value, blinding)")
             if not all(isinstance(x, int) for x in share):
                 raise ValueError("Share components must be integers")
@@ -322,44 +334,45 @@ if __name__ == "__main__":
     # Create a VSS instance
     vss = VSS()
     
-    # Share a secret
-    secret = 42
-    num_shares = 5
-    threshold = 3
-    prime = vss.q  # 使用q作为prime
+    # # Share a secret
+    # secret = 42
+    # num_shares = 5
+    # threshold = 3
+    # prime = vss.q  # 使用q作为prime
     
-    shares, commitments = vss.share(secret, num_shares, threshold, prime)
+    # shares, commitments = vss.share(secret, num_shares, threshold, prime)
     
-    # 测试批量验证
-    is_valid = vss.verify_shares_batch(shares, commitments, prime)
-    print(f"Batch verification result: {is_valid}")
+    # # 测试批量验证
+    # is_valid = vss.verify_shares_batch(shares, commitments, prime)
+    # print(f"Batch verification result: {is_valid}")
     
-    # 测试单个验证
-    for share in shares:
-        is_valid = vss.verify_share(share, commitments, prime)
-        print(f"Share {share} is valid: {is_valid}")
+    # # 测试单个验证
+    # for share in shares:
+    #     is_valid = vss.verify_share(share, commitments, prime)
+    #     print(f"Share {share} is valid: {is_valid}")
     
-    # Reconstruct the secret
-    reconstructed_secret = vss.reconstruct(shares[:threshold], prime)
-    print(f"Original secret: {secret}")
-    print(f"Reconstructed secret: {reconstructed_secret}")
-    print(f"Reconstruction successful: {secret == reconstructed_secret}")
+    # # Reconstruct the secret
+    # reconstructed_secret = vss.reconstruct(shares[:threshold], prime)
+    # print(f"Original secret: {secret}")
+    # print(f"Reconstructed secret: {reconstructed_secret}")
+    # print(f"Reconstruction successful: {secret == reconstructed_secret}")
+    
     
     # Test Pedersen commitment homomorphism
-    print("\n【Pedersen承诺同态性质测试】")
-    s1 = random.randrange(0, vss.q)
-    s2 = random.randrange(0, vss.q)
-    r1 = random.randrange(0, vss.q)
-    r2 = random.randrange(0, vss.q)
-    C1 = (pow(vss.g, s1, vss.p) * pow(vss.h, r1, vss.p)) % vss.p
-    C2 = (pow(vss.g, s2, vss.p) * pow(vss.h, r2, vss.p)) % vss.p
-    C_mul = (C1 * C2) % vss.p
-    C_sum = (pow(vss.g, (s1 + s2) % vss.q, vss.p) * pow(vss.h, (r1 + r2) % vss.q, vss.p)) % vss.p
-    print(f"C1 = g^s1 h^r1 mod p = {C1}")
-    print(f"C2 = g^s2 h^r2 mod p = {C2}")
-    print(f"C1 * C2 mod p = {C_mul}")
-    print(f"g^(s1+s2) h^(r1+r2) mod p = {C_sum}")
-    print(f"同态性质验证: {C_mul == C_sum}")
+    # print("\n【Pedersen承诺同态性质测试】")
+    # s1 = random.randrange(0, vss.q)
+    # s2 = random.randrange(0, vss.q)
+    # r1 = random.randrange(0, vss.q)
+    # r2 = random.randrange(0, vss.q)
+    # C1 = (pow(vss.g, s1, vss.p) * pow(vss.h, r1, vss.p)) % vss.p
+    # C2 = (pow(vss.g, s2, vss.p) * pow(vss.h, r2, vss.p)) % vss.p
+    # C_mul = (C1 * C2) % vss.p
+    # C_sum = (pow(vss.g, (s1 + s2) % vss.q, vss.p) * pow(vss.h, (r1 + r2) % vss.q, vss.p)) % vss.p
+    # print(f"C1 = g^s1 h^r1 mod p = {C1}")
+    # print(f"C2 = g^s2 h^r2 mod p = {C2}")
+    # print(f"C1 * C2 mod p = {C_mul}")
+    # print(f"g^(s1+s2) h^(r1+r2) mod p = {C_sum}")
+    # print(f"同态性质验证: {C_mul == C_sum}")
 
     # 性能测试
     # print("\n【VSS性能测试】")
@@ -406,58 +419,108 @@ if __name__ == "__main__":
     #     # print(f"重构时间: {reconstruct_time:.6f} 秒")
     #     print("生成+验证时间", share_time+batch_verify_time)
 
-    # 测试高维向量的批量恢复
-    print("\n【高维向量批量恢复测试】")
+    # # 测试高维向量的批量恢复
+    # print("\n【高维向量批量恢复测试】")
+    # print("=" * 50)
+    
+    # # 测试参数
+    # vector_dim = 10000  # 向量维度
+    # num_shares = 5      # 份额数量
+    # threshold = 3       # 阈值
+    # prime = vss.q       # 使用q作为prime
+    
+    # # 生成随机向量
+    # vector = np.random.randint(0, 1000, vector_dim)
+    # print(f"向量维度: {vector_dim}")
+    # print(f"份额数量: {num_shares}")
+    # print(f"阈值: {threshold}")
+    
+    # # 为向量的每一维生成份额
+    # all_shares = []
+    # for secret in vector:
+    #     shares, _ = vss.share(secret, num_shares, threshold, prime)
+    #     all_shares.append(shares)
+    
+    # # 测试单个恢复
+    # print("\n【单个恢复测试】")
+    # start_time = time.time()
+    # single_recovered = []
+    # for shares in all_shares:
+    #     secret = vss.reconstruct(shares, prime)
+    #     single_recovered.append(secret)
+    # single_time = time.time() - start_time
+    # print(f"单个恢复总时间: {single_time:.4f} 秒")
+    # print(f"平均每个维度恢复时间: {single_time/vector_dim*1000:.4f} 毫秒")
+    
+    # # 测试批量恢复
+    # print("\n【批量恢复测试】")
+    # start_time = time.time()
+    # batch_recovered = vss.reconstruct_batch_fast(all_shares, prime)
+    # batch_time = time.time() - start_time
+    # print(f"批量恢复总时间: {batch_time:.4f} 秒")
+    # print(f"平均每个维度恢复时间: {batch_time/vector_dim*1000:.4f} 毫秒")
+    
+    # # 验证结果
+    # is_correct = all(s == b for s, b in zip(single_recovered, batch_recovered))
+    # print(f"\n恢复结果验证: {'正确' if is_correct else '错误'}")
+    
+    # # 计算性能提升
+    # speedup = single_time / batch_time
+    # print(f"性能提升倍数: {speedup:.2f}x")
+    
+    # 打印一些样本值进行对比
+    # print("\n【样本值对比】")
+    # print("原始值\t单个恢复\t批量恢复")
+    # print("-" * 40)
+    # for i in range(min(5, vector_dim)):
+    #     print(f"{vector[i]}\t{single_recovered[i]}\t{batch_recovered[i]}")
+
+    # 测试多个值的份额相加后恢复
+    print("\n【多个值的份额相加后恢复测试】")
     print("=" * 50)
     
     # 测试参数
-    vector_dim = 10000  # 向量维度
+    num_values = 5      # 值的数量
     num_shares = 5      # 份额数量
     threshold = 3       # 阈值
     prime = vss.q       # 使用q作为prime
     
-    # 生成随机向量
-    vector = np.random.randint(0, 1000, vector_dim)
-    print(f"向量维度: {vector_dim}")
-    print(f"份额数量: {num_shares}")
-    print(f"阈值: {threshold}")
+    # 生成多个随机值
+    # values = [random.randint(0, 1000) for _ in range(num_values)]
+    values = [10, 10, 10, 10, 10]
+    print(f"原始值: {values}")
+    print(f"原始值的和: {sum(values)}")
     
-    # 为向量的每一维生成份额
+    # 为每个值生成份额
     all_shares = []
-    for secret in vector:
-        shares, _ = vss.share(secret, num_shares, threshold, prime)
+    for value in values:
+        shares, _ = vss.share(value, num_shares, threshold, prime)
         all_shares.append(shares)
     
-    # 测试单个恢复
-    print("\n【单个恢复测试】")
-    start_time = time.time()
-    single_recovered = []
-    for shares in all_shares:
-        secret = vss.reconstruct(shares, prime)
-        single_recovered.append(secret)
-    single_time = time.time() - start_time
-    print(f"单个恢复总时间: {single_time:.4f} 秒")
-    print(f"平均每个维度恢复时间: {single_time/vector_dim*1000:.4f} 毫秒")
+    # 将对应位置的份额相加
+    combined_shares = []
+    for i in range(num_shares):
+        # 获取所有份额的第i个位置
+        share_values = [shares[i] for shares in all_shares]
+        # 将对应位置的值相加
+        combined_share = (
+            share_values[0][0],  # 保持索引不变
+            sum(share[1] for share in share_values) % prime,  # 份额值相加
+            sum(share[2] for share in share_values) % prime   # 盲化值相加
+        )
+        combined_shares.append(combined_share)
     
-    # 测试批量恢复
-    print("\n【批量恢复测试】")
-    start_time = time.time()
-    batch_recovered = vss.reconstruct_batch_fast(all_shares, prime)
-    batch_time = time.time() - start_time
-    print(f"批量恢复总时间: {batch_time:.4f} 秒")
-    print(f"平均每个维度恢复时间: {batch_time/vector_dim*1000:.4f} 毫秒")
+    # 从相加后的份额中恢复
+    recovered_sum = vss.reconstruct(combined_shares[:threshold], prime)
     
-    # 验证结果
-    is_correct = all(s == b for s, b in zip(single_recovered, batch_recovered))
-    print(f"\n恢复结果验证: {'正确' if is_correct else '错误'}")
+    print(f"\n恢复后的和: {recovered_sum}")
+    print(f"验证结果: {'正确' if recovered_sum == sum(values) % prime else '错误'}")
     
-    # 计算性能提升
-    speedup = single_time / batch_time
-    print(f"性能提升倍数: {speedup:.2f}x")
+    # 打印详细的份额信息
+    print("\n【份额详情】")
+    print("原始份额:")
+    for i, shares in enumerate(all_shares):
+        print(f"值 {values[i]} 的份额: {shares}")
     
-    # 打印一些样本值进行对比
-    print("\n【样本值对比】")
-    print("原始值\t单个恢复\t批量恢复")
-    print("-" * 40)
-    for i in range(min(5, vector_dim)):
-        print(f"{vector[i]}\t{single_recovered[i]}\t{batch_recovered[i]}")
+    print("\n相加后的份额:")
+    print(combined_shares)

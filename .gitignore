@@ -8,5 +8,6 @@ doc/
 doc/*
 note/
 note/*
+*.xlsx
 
 

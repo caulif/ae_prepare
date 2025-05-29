@@ -227,8 +227,16 @@ class SA_ClientAgent(Agent):
             if msg.body['iteration'] == self.current_iteration:
                 dt_protocol_start = pd.Timestamp('now')
                 self.reco_time = time.time()
+                # 检查是否收到足够的份额，即request id list 是否全在receive_mask_shares中，如果不全，则等待
+                # if not all(id in self.receive_mask_shares for id in msg.body['request id list']):
+                #     # 等待
+                #     time.sleep(0.1)
+                #     return
+
                 sum_shares = self.get_sum_shares(msg.body['request id list'])
                 clt_comp_delay = pd.Timestamp('now') - dt_protocol_start
+
+                print(f"Client {self.id} received request shares sum", sum_shares)
 
                 self.sendMessage(self.AggregatorAgentID,
                                  Message({"msg": "hprf_SUM_SHARES",
@@ -295,7 +303,6 @@ class SA_ClientAgent(Agent):
             # 存储份额和承诺
             self.receive_mask_shares[sender_id] = temp_shared_mask
             self.mask_commitments[sender_id] = commitments
-            
             # 检查是否收到足够的份额
             if len(self.receive_mask_shares) >= self.num_clients//3 and self.flag == 0:
                 vss_start_time = time.time()
@@ -346,7 +353,8 @@ class SA_ClientAgent(Agent):
             currentTime (pandas.Timestamp): The current simulation time.
         """
         if self.current_iteration == 1:
-            self.mask_seed = random.SystemRandom().randint(1, 10000)
+            # self.mask_seed = random.SystemRandom().randint(1, 10000)
+            self.mask_seed = 10
             self.share_mask_seed()
 
         # 只统计本地计算时间
@@ -380,32 +388,66 @@ class SA_ClientAgent(Agent):
         Generates and shares the mask seed using verifiable secret sharing.
         """
         try:
-            # 只统计本地计算时间
             compute_start = time.time()
             
-            shares, commitments = self.vss_share(self.mask_seed, len(self.user_committee),
-                                              len(self.user_committee)//3, self.prime)
+            # 检查user_committee
+            if not self.user_committee:
+                self.agent_print(f"Error: user_committee is empty for client {self.id}")
+                return
+            
+            # 统一使用委员会大小的1/3作为阈值
+            threshold = max(2, len(self.user_committee) // 3)
+            
+            # 打印调试信息
+            self.agent_print(f"Client {self.id} - user_committee size: {len(self.user_committee)}, threshold: {threshold}")
+            
+            # 生成一个随机值
+            self.agent_print(f"客户端{self.id}生成的随机值: {self.mask_seed}")
+            
+            # 生成份额
+            shares, commitments = self.vss_share(self.mask_seed, 
+                                              len(self.user_committee),
+                                              threshold, 
+                                              self.prime)
+            
+            # 打印生成的份额
+            self.agent_print(f"客户端{self.id}生成的份额: {shares}")
             
             compute_time = time.time() - compute_start
             self.timings["Seed sharing"].append(compute_time)
             
+            # 发送份额给委员会成员，添加重试机制
             user_committee_list = list(self.user_committee)
-            
-            # 发送份额给委员会成员
-            for j in range(len(user_committee_list)):
-                share = shares[j]
-                self.sendMessage(user_committee_list[j],
-                              Message({"msg": "SHARED_MASK",
-                                       "sender": self.id,
-                                       "shared_mask": share,
-                                       "commitments": commitments,
-                                       }),
-                              tag="comm_secret_sharing",
-                              msg_name=self.msg_name)
+            for j, share in enumerate(shares):
+                max_retries = 3
+                retry_count = 0
+                while retry_count < max_retries:
+                    try:
+                        # 发送份额给委员会成员
+                        self.sendMessage(user_committee_list[j],
+                                      Message({"msg": "SHARED_MASK",
+                                               "sender": self.id,
+                                               "shared_mask": share,
+                                               "commitments": commitments,
+                                               }),
+                                      tag="comm_secret_sharing",
+                                      msg_name=self.msg_name)
+                        
+                        self.agent_print(f"客户端{self.id}发送份额给委员会成员{user_committee_list[j]}: {share}")
+                        break
+                    except Exception as e:
+                        retry_count += 1
+                        if retry_count == max_retries:
+                            self.agent_print(f"Error sending share to committee member {user_committee_list[j]} after {max_retries} retries: {str(e)}")
+                        else:
+                            time.sleep(0.1)  # 等待0.1秒后重试
 
         except Exception as e:
-            self.agent_print(f"Error in share_mask_seed: {str(e)}")
-            pass
+            self.agent_print(f"Error in share_mask_seed for client {self.id}: {str(e)}")
+            # 打印更详细的错误信息
+            import traceback
+            self.agent_print(traceback.format_exc())
+            return
 
     def generate_shares(secret, num_shares, threshold, prime, seed=None):
         """
@@ -435,7 +477,7 @@ class SA_ClientAgent(Agent):
         Args:
             secret: The secret to be shared.
             num_shares: The number of shares to generate.
-            threshold: The number of shares required to reconstruct the secret. Defaults to half of num_shares.
+            threshold: The number of shares required to reconstruct the secret. Defaults to num_shares//3.
             prime: The prime number to use.
             seed: An optional seed for the random number generator.
 
@@ -444,7 +486,7 @@ class SA_ClientAgent(Agent):
             commitments: A list of commitments for verification.
         """
         if threshold is None:
-            threshold = num_shares//3
+            threshold = max(2, num_shares // 3)  # 确保阈值至少为2
         if prime is None:
             prime = self.prime
             
@@ -492,7 +534,8 @@ class SA_ClientAgent(Agent):
         for share in shares_list:
             if share == 0:
                 continue
-            sum_value += share[1] % prime
+            sum_value += share[1]
+        sum_value = sum_value % prime
         i = 0
         while 1:
             if shares_list[i] == 0:
@@ -514,16 +557,22 @@ class SA_ClientAgent(Agent):
         """
         # 只统计本地计算时间
         compute_start = time.time()
+        print("client_id_list", client_id_list)
         
+        print(f"Client {self.id} 得到的分享值", self.receive_mask_shares)
         shares = []
         for i in range(len(client_id_list)):
             if client_id_list[i] in self.receive_mask_shares:
                 shares.append(self.receive_mask_shares[client_id_list[i]])
 
+        print("shares", shares)
+
         sum_shares = SA_ClientAgent.sum_shares(shares, self.prime)
         
         compute_time = time.time() - compute_start
         self.timings["RECONSTRUCTION"].append(compute_time)
+
+
         
         return sum_shares
 

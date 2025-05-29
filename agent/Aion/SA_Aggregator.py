@@ -96,7 +96,7 @@ class SA_AggregatorAgent(Agent):
         self.client_id_list = None
         self.seed_sum_hprf = None
         self.selected_indices = None
-        self.committee_shares_sum = None
+        self.committee_shares_sum = {}
         self.seed_sum = None
         self.recv_user_masked_vectors = {}
         self.recv_committee_shares_sum = {}
@@ -297,7 +297,8 @@ class SA_AggregatorAgent(Agent):
         
         # 选择委员会成员
         self.user_committee = param.choose_committee(param.root_seed, self.commit_size, self.num_clients)
-        self.committee_threshold = len(self.user_committee) // 4
+        # 统一使用委员会大小的1/3作为阈值
+        self.committee_threshold = max(2, len(self.user_committee) // 3)
 
         # 初始化BFT协议
         self.bft_protocol = BFTProtocol(
@@ -521,7 +522,10 @@ class SA_AggregatorAgent(Agent):
         dt_protocol_start = pd.Timestamp('now')
         self.reco_time = time.time()
 
-        self.reconstruction_read_from_pool()
+        # 尝试读取份额，如果不够则等待下次唤醒
+        if not self.reconstruction_read_from_pool():
+            return
+
         self.reconstruction_process()
         self.reconstruction_clear_pool()
         self.reconstruction_send_message()
@@ -545,11 +549,28 @@ class SA_AggregatorAgent(Agent):
 
     def reconstruction_read_from_pool(self):
         """Reads decryption shares from the receiving pool."""
-        while len(self.recv_committee_shares_sum) < self.committee_threshold:
-            time.sleep(0.01)
-
+        if len(self.recv_committee_shares_sum) < self.committee_threshold:
+            # 记录缺失的份额
+            missing_shares = set(self.selected_indices) - set(self.recv_committee_shares_sum.keys())
+            if missing_shares:
+                self.agent_print(f"Missing shares from clients: {missing_shares}")
+                # 重新请求缺失的份额
+                for id in self.user_committee:
+                    self.sendMessage(id,
+                                    Message({"msg": "request shares sum",
+                                            "iteration": self.current_iteration,
+                                            "request id list": list(missing_shares),
+                                            }),
+                                    tag="comm_sign_server",
+                                    msg_name=self.msg_name)
+            
+            # 设置2秒后重新唤醒
+            self.setWakeup(pd.Timestamp('now') + pd.Timedelta('2s'))
+            return False
+            
         self.committee_shares_sum = self.recv_committee_shares_sum
         self.recv_committee_shares_sum = {}
+        return True
 
     def reconstruction_clear_pool(self):
         """Clears all message pools."""
@@ -569,9 +590,25 @@ class SA_AggregatorAgent(Agent):
         # 只统计本地计算时间
         compute_start = time.time()
         
-        # 1. 首先恢复出种子和
-        committee_shares_sum_list = [shares[0] for shares in self.committee_shares_sum.values()]
-        self.seed_sum = SA_AggregatorAgent.reconstruct_secret(committee_shares_sum_list, self.prime)
+        # 1. 从委员会成员发送的相加后的份额中恢复出种子和
+        committee_shares = list(self.committee_shares_sum.values())
+        print("委员会成员发送的相加后的份额:", committee_shares)
+        
+        # 将份额转换为(index, value, blinding)格式
+        valid_shares = []
+        for share in committee_shares[:self.committee_threshold]:
+            if isinstance(share, list) and len(share) == 1 and isinstance(share[0], tuple) and len(share[0]) >= 2:
+                # 添加一个默认的blinding值0
+                valid_shares.append((share[0][0], share[0][1], 0))
+            else:
+                self.agent_print(f"Invalid share format: {share}")
+                continue
+                
+        if len(valid_shares) < self.committee_threshold:
+            raise RuntimeError("Not enough valid shares for reconstruction")
+            
+        self.seed_sum = self.vss.reconstruct(valid_shares, self.prime)
+        print(f"恢复出的种子和: {self.seed_sum}")
         
         # 2. 使用恢复出的种子生成掩码向量
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
@@ -602,81 +639,6 @@ class SA_AggregatorAgent(Agent):
         # 使用BFT就全局模型达成共识
         _, consensus_time = self._bft_broadcast_with_consensus(message_final_sum, self.user_committee)
         self.timings["Model aggregation"].append(time.time()-start_time)
-
-    @staticmethod
-    def reconstruct_secret(shares: list, prime: int) -> int:
-        """
-        从秘密份额中恢复秘密值
-        
-        Args:
-            shares (list): 秘密份额列表，格式为 [(x_i, y_i)]
-            prime (int): 使用的素数
-        
-        Returns:
-            int: 恢复的秘密值
-        """
-        secret = 0
-        for i, (x_i, y_i) in enumerate(shares):
-            numerator, denominator = 1, 1
-            for j, (x_j, _) in enumerate(shares):
-                if i == j:
-                    continue
-                numerator = (numerator * (-x_j)) % prime
-                denominator = (denominator * (x_i - x_j)) % prime
-            lagrange_coefficient = (numerator * sympy.mod_inverse(denominator, prime)) % prime
-            secret = (secret + y_i * lagrange_coefficient) % prime
-        return secret
-
-    @staticmethod
-    def reconstruct_secret_vector(shares: list, prime: int) -> list:
-        """
-        Recovers a secret vector from secret shares, with all elements sharing the same Lagrangian coefficients.
-
-        Args:
-            shares (list): List of secret shares for each vector element.
-            prime (int): The prime number used.
-
-        Returns:
-            list: The recovered secret vector.
-        """
-        n = len(shares)  # Dimension of the vector
-        k = len(shares[0])  # Number of shares used for reconstruction (assuming all elements have same number of shares)
-
-        # Pre-compute Lagrange coefficients since they are the same for all elements
-        lagrange_coefficients = []
-        for i in range(n):
-            numerator, denominator = 1, 1
-            x_i, _ = shares[i][0]  # Get x value of the first share since x is same for all elements
-            for j in range(n):
-                if i == j:
-                    continue
-                x_j, _ = shares[j][0]
-                numerator = (numerator * (-1 * x_j)) % prime
-                denominator = (denominator * (x_i - x_j)) % prime
-            lagrange_coefficients.append((numerator * sympy.mod_inverse(denominator, prime)) % prime)
-
-        secret_vector = []
-        for i in range(k):
-            secret_element = 0
-            for j in range(n):
-                _, y_i = shares[j][i]
-                secret_element = (secret_element + y_i * lagrange_coefficients[j]) % prime  # Using the pre-computed Lagrange coefficients
-            secret_vector.append(secret_element % prime)
-        return secret_vector
-
-    @staticmethod
-    def vss_reconstruct(shares: list, prime: int) -> int:
-        """
-        Local function to recover the secret.
-
-        Args:
-            shares (list): List of secret shares.
-            prime (int): The prime number used.
-
-        Returns:
-            int: The recovered secret.
-        """
-        return SA_AggregatorAgent.reconstruct_secret(shares, prime)
 
     def reconstruction_send_message(self):
         """Sends the final result to clients."""
@@ -802,17 +764,43 @@ class SA_AggregatorAgent(Agent):
             
         # 检查是否收到足够的份额
         if len(self.recv_shared_masks) >= self.committee_threshold:
-            # 使用批量验证
-            # shares = list(self.recv_shared_masks.values())
-            # commitments = list(self.mask_commitments.values())[0]  # 使用第一个承诺
-            # is_valid = self.vss.verify_shares_batch(shares, commitments, self.prime)
+            # 等待一段时间，确保收到所有份额
+            wait_start = time.time()
+            while time.time() - wait_start < 2.0:  # 等待最多2秒
+                if len(self.recv_shared_masks) == len(self.selected_indices):
+                    break
+                time.sleep(0.1)  # 每0.1秒检查一次
             
-            # if not is_valid:
-            #     self.agent_print("Invalid shares detected in batch verification")
-            #     return
-                
-            self.agent_print("All shares verified successfully in batch")
-            self.crosscheck(currentTime)
+            self.agent_print(f"Committee member {self.id} received {len(self.recv_shared_masks)} shares out of {len(self.selected_indices)}")
+            
+            # 将收到的所有份额相加
+            combined_share = None
+            for share in self.recv_shared_masks.values():
+                if combined_share is None:
+                    combined_share = share
+                else:
+                    # 将对应位置的值相加，保持索引和盲化值
+                    combined_share = (
+                        combined_share[0],  # 保持索引不变
+                        (combined_share[1] + share[1]) % self.prime,  # 份额值相加
+                        (combined_share[2] + share[2]) % self.prime   # 盲化值相加
+                    )
+            
+            # 发送相加后的份额给服务器
+            self.sendMessage(self.AggregatorAgentID,
+                          Message({"msg": "hprf_SUM_SHARES",
+                                   "iteration": self.current_iteration,
+                                   "sender": self.id,
+                                   "sum_shares": combined_share,  # 直接发送完整的份额元组
+                                   }),
+                          tag="comm_secret_sharing",
+                          msg_name=self.msg_name)
+            
+            self.agent_print(f"Committee member {self.id} sent combined share to server")
+            
+            # 清空接收到的份额
+            self.recv_shared_masks = {}
+            self.mask_commitments = {}
 
     def handle_mask_commitments(self, currentTime, msg):
         """
