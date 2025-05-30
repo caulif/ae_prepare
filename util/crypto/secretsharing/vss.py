@@ -43,7 +43,7 @@ class VSS:
         """生成安全的生成元"""
         while True:
             x = random.randrange(2, self.p - 1)
-            g = pow(x, (self.p - 1) // self.q, self.p)
+            g = gmpy2.powmod(x, (self.p - 1) // self.q, self.p)
             if g != 1 and (different_from is None or g != different_from):
                 return g
         
@@ -114,11 +114,11 @@ class VSS:
             
             # 计算f(i)
             for j, coef in enumerate(f_coeffs):
-                f_i = (f_i + coef * pow(i, j, self.q)) % self.q
+                f_i = (f_i + coef * gmpy2.powmod(i, j, self.q)) % self.q
             
             # 计算r(i)
             for j, coef in enumerate(r_coeffs):
-                r_i = (r_i + coef * pow(i, j, self.q)) % self.q
+                r_i = (r_i + coef * gmpy2.powmod(i, j, self.q)) % self.q
             
             shares.append((i, f_i, r_i))
         
@@ -153,13 +153,13 @@ class VSS:
             r_x = r_x % self.q
             
             # 计算 g^f(x) * h^r(x) mod p
-            left = (pow(self.g, f_x, self.p) * pow(self.h, r_x, self.p)) % self.p
+            left = (gmpy2.powmod(self.g, f_x, self.p) * gmpy2.powmod(self.h, r_x, self.p)) % self.p
             
             # 计算 ∏(C_j^x^j) mod p
             right = 1
             for j, Cj in enumerate(commitments):
-                x_pow_j = pow(x, j, self.q)
-                right = (right * pow(Cj, x_pow_j, self.p)) % self.p
+                x_pow_j = gmpy2.powmod(x, j, self.q)
+                right = (right * gmpy2.powmod(Cj, x_pow_j, self.p)) % self.p
             
             return left == right
             
@@ -189,7 +189,7 @@ class VSS:
                 f_x = f_x % self.q
                 r_x = r_x % self.q
                 # 计算单个份额的承诺
-                C_i = (pow(self.g, f_x, self.p) * pow(self.h, r_x, self.p)) % self.p
+                C_i = (gmpy2.powmod(self.g, f_x, self.p) * gmpy2.powmod(self.h, r_x, self.p)) % self.p
                 # 累乘所有承诺
                 C_total = (C_total * C_i) % self.p
             
@@ -201,7 +201,7 @@ class VSS:
                 sum_r = (sum_r + r_x) % self.q
             
             # 使用同态性质计算总承诺
-            C_sum = (pow(self.g, sum_f, self.p) * pow(self.h, sum_r, self.p)) % self.p
+            C_sum = (gmpy2.powmod(self.g, sum_f, self.p) * gmpy2.powmod(self.h, sum_r, self.p)) % self.p
             
             # 验证两个结果是否相等
             return C_total == C_sum
@@ -241,8 +241,9 @@ class VSS:
                 share = (share[0], share[1], 0)
             elif len(share) != 3:
                 raise ValueError("Invalid share format: must be (index, value) 或 (index, value, blinding)")
-            if not all(isinstance(x, int) for x in share):
-                raise ValueError("Share components must be integers")
+            # 修改类型检查，允许mpz类型
+            if not all(isinstance(x, (int, gmpy2.mpz)) for x in share):
+                raise ValueError("Share components must be integers or mpz")
             normalized_shares.append(share)
         
         # 使用拉格朗日插值重构秘密（在q上）
@@ -254,12 +255,12 @@ class VSS:
                     numerator = (numerator * (-x_j)) % self.q
                     denominator = (denominator * (x_i - x_j)) % self.q
             try:
-                inv_denominator = pow(denominator, -1, self.q)
+                inv_denominator = gmpy2.powmod(denominator, -1, self.q)
                 lagrange_coef = (numerator * inv_denominator) % self.q
                 secret = (secret + (y_i * lagrange_coef) % self.q) % self.q
             except ValueError:
                 continue
-        return secret
+        return int(secret)  # 确保返回Python原生整数
 
     def reconstruct_batch(self, shares_list, prime):
         """
@@ -317,7 +318,7 @@ class VSS:
                     numerator = (numerator * (-x_j)) % self.q
                     denominator = (denominator * (x_i - x_j)) % self.q
             try:
-                inv_denominator = pow(denominator, -1, self.q)
+                inv_denominator = gmpy2.powmod(denominator, -1, self.q)
                 lagrange_coef = (numerator * inv_denominator) % self.q
                 lagrange_coeffs.append(lagrange_coef)
             except ValueError:
@@ -373,10 +374,10 @@ if __name__ == "__main__":
     s2 = random.randrange(0, vss.q)
     r1 = random.randrange(0, vss.q)
     r2 = random.randrange(0, vss.q)
-    C1 = (pow(vss.g, s1, vss.p) * pow(vss.h, r1, vss.p)) % vss.p
-    C2 = (pow(vss.g, s2, vss.p) * pow(vss.h, r2, vss.p)) % vss.p
+    C1 = (gmpy2.powmod(vss.g, s1, vss.p) * gmpy2.powmod(vss.h, r1, vss.p)) % vss.p
+    C2 = (gmpy2.powmod(vss.g, s2, vss.p) * gmpy2.powmod(vss.h, r2, vss.p)) % vss.p
     C_mul = (C1 * C2) % vss.p
-    C_sum = (pow(vss.g, (s1 + s2) % vss.q, vss.p) * pow(vss.h, (r1 + r2) % vss.q, vss.p)) % vss.p
+    C_sum = (gmpy2.powmod(vss.g, (s1 + s2) % vss.q, vss.p) * gmpy2.powmod(vss.h, (r1 + r2) % vss.q, vss.p)) % vss.p
     print(f"C1 = g^s1 h^r1 mod p = {C1}")
     print(f"C2 = g^s2 h^r2 mod p = {C2}")
     print(f"C1 * C2 mod p = {C_mul}")

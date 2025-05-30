@@ -300,15 +300,12 @@ class SA_ClientAgent(Agent):
                 # 使用同态性质验证所有份额
                 shares = list(self.receive_mask_shares.values())
                 all_commitments = list(self.mask_commitments.values())
-                
                 # 使用批量验证方法
                 is_valid = self.vss.verify_shares_batch(shares, all_commitments[0], self.prime)
-                
                 if is_valid:
                     pass
                 else:
                     raise Exception("份额验证失败")
-                
                 self.timings["Seed sharing"][0] += (time.time() - vss_start_time)
 
 
@@ -320,8 +317,7 @@ class SA_ClientAgent(Agent):
             currentTime (pandas.Timestamp): The current simulation time.
         """
         if self.current_iteration == 1:
-            # self.mask_seed = random.SystemRandom().randint(1, 10000)
-            self.mask_seed = 10
+            self.mask_seed = random.SystemRandom().randint(1, 100000)
             self.share_mask_seed()
 
         # 只统计本地计算时间
@@ -357,24 +353,23 @@ class SA_ClientAgent(Agent):
         """
         compute_start = time.time()
         
-        # 检查user_committee
+        # Check user_committee
         if not self.user_committee:
             self.agent_print(f"Error: user_committee is empty for client {self.id}")
             return
         
-        # 统一使用委员会大小的1/3作为阈值
+        # Use 1/3 of committee size as threshold
         threshold = max(2, len(self.user_committee) // 3)   
-        # 生成份额
+        # Generate shares
         shares, commitments = self.vss_share(self.mask_seed, 
                                             len(self.user_committee),
                                             threshold, 
                                             self.prime)
         
-        
         compute_time = time.time() - compute_start
         self.timings["Seed sharing"].append(compute_time)
         
-        # 发送份额给委员会成员，添加重试机制
+        # Send shares to committee members, add retry mechanism
         user_committee_list = list(self.user_committee)
         for j, share in enumerate(shares):
             self.sendMessage(user_committee_list[j],
@@ -495,24 +490,18 @@ class SA_ClientAgent(Agent):
         Returns:
             sum_shares: The sum of the secret shares.
         """
-        # 只统计本地计算时间
+        # Only count local computation time
         compute_start = time.time()
-        # print("client_id_list", client_id_list)
         
-        # print(f"Client {self.id} 得到的分享值", self.receive_mask_shares)
         shares = []
         for i in range(len(client_id_list)):
             if client_id_list[i] in self.receive_mask_shares:
                 shares.append(self.receive_mask_shares[client_id_list[i]])
 
-        # print("shares", shares)
-
         sum_shares = SA_ClientAgent.sum_shares(shares, self.prime)
         
         compute_time = time.time() - compute_start
         self.timings["RECONSTRUCTION"].append(compute_time)
-
-
         
         return sum_shares
 

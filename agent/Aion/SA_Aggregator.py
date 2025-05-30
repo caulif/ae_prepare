@@ -204,27 +204,14 @@ class SA_AggregatorAgent(Agent):
         super().kernelStarting(startTime)
 
     def kernelStopping(self):
-        """在kernel停止时执行清理工作，包括计算平均时间"""
-        # 计算平均时间并记录到kernel状态
+        """Execute cleanup work when kernel stops, including calculating average time"""
+        # Calculate average time and record to kernel state
         for part, times in self.timings.items():
-            if times:  # 确保列表不为空
+            if times:  # Ensure list is not empty
                 avg_time = sum(times) / len(times)
                 self.kernel.custom_state[part] = avg_time
             else:
-                self.kernel.custom_state[part] = 0  # 如果列表为空，设置为0
-
-        # 打印总时间和每个部分的时间
-        self.stoptime = time.time()
-        print("Time statistics for each part:")
-        for part, times in self.timings.items():
-            if times:
-                avg_time = sum(times) / len(times)
-                print(f"{part}: Average time {avg_time:.6f} seconds, Total time {sum(times):.6f} seconds")
-            else:
-                print(f"{part}: No data available")
-
-
-        
+                self.kernel.custom_state[part] = 0  # If list is empty, set to 0
 
         super().kernelStopping()
 
@@ -292,38 +279,37 @@ class SA_AggregatorAgent(Agent):
             self.agent_print(f"Unknown message type: {msg.body['msg']}")
 
     def initialize(self, currentTime):
-        """初始化阶段，包括选择委员会成员和验证客户端有效性"""
+        """Initialization phase, including committee member selection and client validation"""
         start_time = time.time()
         dt_protocol_start = pd.Timestamp('now')
         
-        # 选择委员会成员
+        # Select committee members
         self.user_committee = param.choose_committee(param.root_seed, self.commit_size, self.num_clients)
-        # 统一使用委员会大小的1/3作为阈值
+        # Use 1/3 of committee size as threshold
         self.committee_threshold = max(2, len(self.user_committee) // 3)
 
-        # 初始化BFT协议
+        # Initialize BFT protocol
         self.bft_protocol = BFTProtocol(
             node_id=self.id,
             total_nodes=self.num_clients,
             f=self.num_clients // 3
         )
 
-        # 验证客户端有效性
+        # Validate client validity
         valid_clients = self._validate_clients()
         
-        # 使用BFT就有效客户端集合达成共识
+        # Use BFT to reach consensus on valid client set
         valid_clients_message = Message({
             "msg": "VALID_CLIENTS",
             "iteration": 0,
             "valid_clients": valid_clients
         })
         self.timings["Legal clients confirmation"].append(time.time() - start_time)
-        # 广播有效客户端集合
+        # Broadcast valid client set
         self._bft_broadcast_with_consensus(valid_clients_message, self.user_committee)
-        # 记录Legal clients confirmation的时间
+        # Record Legal clients confirmation time
 
-        
-        # 发送初始模型
+        # Send initial model
         initial_model_weights = np.ones(self.vector_len, dtype=self.vector_dtype) * 1000
         model_message = Message({
             "msg": "INITIAL_MODEL",
@@ -334,15 +320,12 @@ class SA_AggregatorAgent(Agent):
         self.client_id_list = valid_clients
         self._bft_broadcast_with_consensus(model_message, self.client_id_list)
 
-        
-        
-
         self.current_round = 1
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
         self.setWakeup(currentTime + server_comp_delay + pd.Timedelta('2s'))
 
     def _validate_clients(self) -> List[int]:
-        """验证客户端有效性"""
+        """Validate client validity"""
         valid_clients = []
         for client_id in range(self.num_clients):
             if self._verify_client_credentials(client_id):
@@ -350,26 +333,26 @@ class SA_AggregatorAgent(Agent):
         return valid_clients
 
     def _verify_client_credentials(self, client_id: int) -> bool:
-        """验证客户端凭证"""
-        # 在实际实现中，这里应该验证客户端的证书和签名
-        # 这里使用简单的示例实现
+        """Verify client credentials"""
+        # In actual implementation, this should verify client certificates and signatures
+        # Here using a simple example implementation
         return True
 
     def _bft_broadcast_with_consensus(self, message: Message, recipients: List[int]) -> Dict[int, BFTMessage]:
-        """使用BFT协议进行广播并等待共识"""
-        # 准备阶段 - 只统计本地计算时间
+        """Broadcast using BFT protocol and wait for consensus"""
+        # Preparation phase - only count local computation time
         compute_start = time.time()
         prepare_msg = self.bft_protocol.prepare(message)
         compute_time = time.time() - compute_start
 
-        # 根据消息类型确定BFT消息类型
+        # Determine BFT message type based on message type
         bft_msg_type = "BFT_SIGN_LEGAL"
         if message.body['msg'] == "ONLINE_CLIENTS":
             bft_msg_type = "BFT_SIGN_ONLINE"
         elif message.body['msg'] == "FINAL_SUM":
             bft_msg_type = "BFT_SIGN_FINAL"
 
-        # 发送给所有接收者
+        # Send to all recipients
         for recipient_id in recipients:
             self.sendMessage(
                 recipient_id,
@@ -384,14 +367,14 @@ class SA_AggregatorAgent(Agent):
                 msg_name=self.msg_name
             )
 
-        # 等待共识
+        # Wait for consensus
         start_time = time.time()
         Delta = pd.Timedelta('0.005s')
         responses = {}
         
         while time.time() - start_time < 2 * Delta.total_seconds():
             if len(responses) >= (len(recipients) - self.bft_protocol.f):
-                # 检查是否达成共识 - 只统计本地计算时间
+                # Check if consensus is reached - only count local computation time
                 check_start = time.time()
                 if self._check_bft_consensus(responses):
                     compute_time += time.time() - check_start
@@ -401,17 +384,17 @@ class SA_AggregatorAgent(Agent):
         return responses, compute_time
 
     def _check_bft_consensus(self, responses: Dict[int, BFTMessage]) -> bool:
-        """检查BFT共识是否达成"""
+        """Check if BFT consensus is reached"""
         if len(responses) < (self.num_clients - self.bft_protocol.f):
             return False
         
-        # 检查所有响应是否一致
+        # Check if all responses are consistent
         values = [msg.value for msg in responses.values()]
         return all(v == values[0] for v in values)
 
     def report(self, currentTime):
-        """处理客户端报告，包括在线客户端确认"""
-        # 只统计本地计算时间
+        """Process client reports, including online client confirmation"""
+        # Only count local computation time
         compute_start = time.time()
 
         self.report_read_from_pool()
@@ -419,7 +402,7 @@ class SA_AggregatorAgent(Agent):
         self.report_clear_pool()
         compute_time = time.time() - compute_start
 
-        # BFT确认在线客户端信息
+        # BFT confirm online client information
         online_clients_list = [1 if i in self.recv_user_masked_vectors else 0 for i in range(self.num_clients)]
         online_clients_list_bytes = bytes(online_clients_list)
         message_online_clients = Message({
@@ -428,21 +411,16 @@ class SA_AggregatorAgent(Agent):
             "online_clients": online_clients_list_bytes
         })
         
-        # 使用BFT就在线客户端集合达成共识
+        # Use BFT to reach consensus on online client set
         bft_start_time = time.time()
         _, consensus_time = self._bft_broadcast_with_consensus(message_online_clients, self.user_committee)
         bft_time = time.time() - bft_start_time
 
-        # 记录在线客户端确认时间
+        # Record online client confirmation time
         self.timings["Online clients confirmation"].append(bft_time)
 
-        # self.report_send_message()
-
-        # 记录掩码模型生成时间
-        # self.timings["Masked model generation"].append(compute_time)
-
         self.current_round = 2
-        # 使用实际计算时间来决定下一次唤醒时间
+        # Use actual computation time to determine next wakeup time
         server_comp_delay = pd.Timedelta(seconds=compute_time + bft_time)
         self.setWakeup(currentTime + server_comp_delay)
 
@@ -566,9 +544,8 @@ class SA_AggregatorAgent(Agent):
         
         # 1. 从委员会成员发送的相加后的份额中恢复出种子和
         committee_shares = list(self.committee_shares_sum.values())
-        # print("委员会成员发送的相加后的份额:", committee_shares)
         self.seed_sum = self.vss.reconstruct(committee_shares, self.prime)
-        # print(f"恢复出的种子和: {self.seed_sum}")
+
         
         # 2. 使用恢复出的种子生成掩码向量
         initialization_values_filename = r"agent\\HPRF\\initialization_values"

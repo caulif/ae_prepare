@@ -236,7 +236,7 @@ agent_types.extend(["AggregatorAgent"])
 pairwise = (len(agent_types), len(agent_types))
 
 model_args = {'connected': True,
-              'min_latency': np.random.uniform(low=100000, high=100000, size=pairwise),
+              'min_latency': np.random.uniform(low=1000000, high=1000000, size=pairwise),
               'jitter': 0.3,
               'jitter_clip': 0.05,
               'jitter_unit': 5,
