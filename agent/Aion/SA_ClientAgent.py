@@ -224,7 +224,6 @@ class SA_ClientAgent(Agent):
         """
         super().receiveMessage(currentTime, msg)
         if msg.body["msg"] == "request shares sum":
-            print(len(self.receive_mask_shares))
             if msg.body['iteration'] == self.current_iteration:
                 dt_protocol_start = pd.Timestamp('now')
                 self.reco_time = time.time()
@@ -306,13 +305,9 @@ class SA_ClientAgent(Agent):
                 is_valid = self.vss.verify_shares_batch(shares, all_commitments[0], self.prime)
                 
                 if is_valid:
-                    # self.agent_print(f"Client {self.id}: 份额验证成功")
                     pass
                 else:
-                    # self.agent_print(f"Client {self.id}: 份额验证失败")
-                    # 异常抛出
                     raise Exception("份额验证失败")
-                    # 可以在这里添加错误处理逻辑
                 
                 self.timings["Seed sharing"][0] += (time.time() - vss_start_time)
 

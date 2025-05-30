@@ -477,18 +477,7 @@ class SA_AggregatorAgent(Agent):
                 raise RuntimeError("Client sent a vector with an incorrect length.")
             self.vec_sum_partial += self.user_masked_vectors[id] 
             self.vec_sum_partial %= self.hprf_prime
-            # self.vec_sum_partial %= self.prime
 
-    # def report_send_message(self):
-        # """Sends decryption requests to committee members."""
-        # for id in self.user_committee:
-        #     self.sendMessage(id,
-        #                      Message({"msg": "SIGN",
-        #                               "iteration": self.current_iteration,
-        #                               "client_id_list": self.client_id_list,
-        #                               }),
-        #                      tag="comm_dec_server",
-        #                      msg_name=self.msg_name)
 
     def forward_signatures(self, currentTime):
         """
@@ -587,12 +576,11 @@ class SA_AggregatorAgent(Agent):
         filename = r"matrix"
         shprg = SHPRG(n, m, p, q, filename)
         self.seed_sum_hprf = shprg.hprf(self.seed_sum, self.current_iteration, self.vector_len)
-        print("self.seed_sum_hprf", self.seed_sum_hprf[0])
         self.final_sum = self.vec_sum_partial - self.seed_sum_hprf
         self.final_sum %= self.hprf_prime
         # print("final_sum", self.final_sum)
         self.final_sum //= len(self.selected_indices)
-        print("final_sum", self.final_sum)
+        # print("final_sum", self.final_sum)
         self.final_sum = np.array(self.final_sum, dtype=np.uint32)
 
         self.l2_old = [np.linalg.norm(self.final_sum)] + self.l2_old[:1]
