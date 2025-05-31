@@ -1,7 +1,7 @@
 import torch
 
 from agent.Agent import Agent
-from agent.HPRF.hprf import load_initialization_values, SHPRG
+from agent.HPRF.hprf import load_initialization_values, HPRF
 from message.Message import Message
 import dill
 import time
@@ -325,14 +325,12 @@ class SA_ClientAgent(Agent):
         
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
-        filename = r"matrix"
-        shprg = SHPRG(n, m, p, q, filename)
+        filename = r"agent\\HPRF\\matrix"
+        hprf = HPRF(n, m, p, q, filename)
+        mask_vector = hprf.hprf(self.mask_seed, self.current_iteration, self.vector_len)
+        mask_vector = np.array(mask_vector, dtype=np.float64)
 
-        mask_vector = shprg.hprf(self.mask_seed, self.current_iteration, self.vector_len)
-
-        mask_vector = np.array(mask_vector, dtype=np.uint32)
-
-        vec = np.ones(self.vector_len, dtype=self.vector_dtype)
+        vec = np.ones(self.vector_len, dtype=np.float64)
         masked_vec = vec + mask_vector
 
         compute_time = time.time() - compute_start

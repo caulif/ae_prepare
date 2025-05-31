@@ -11,7 +11,7 @@ import random
 import os
 
 from agent.Agent import Agent
-from agent.HPRF.hprf import load_initialization_values, SHPRG
+from agent.HPRF.hprf import load_initialization_values, HPRF
 from message.Message import Message
 from util import param, util
 from util.crypto.secretsharing.vss import VSS
@@ -89,7 +89,7 @@ class SA_AggregatorAgent(Agent):
         self.prime = param.prime
 
         # Initialize VSS
-        self.vss = VSS()
+        self.vss = VSS(self.prime)
 
         # Data storage
         self.times = []
@@ -109,8 +109,8 @@ class SA_AggregatorAgent(Agent):
         self.recv_shared_masks = {}  # Store received shared masks
 
         # Initialize vectors
-        self.vec_sum_partial = np.zeros(self.vector_len, dtype=self.vector_dtype)
-        self.final_sum = np.zeros(self.vector_len, dtype=self.vector_dtype)
+        self.vec_sum_partial = np.zeros(self.vector_len, dtype=object)
+        self.final_sum = np.zeros(self.vector_len, dtype=object)
 
         # Track current protocol iteration and round
         self.current_iteration = 1
@@ -119,7 +119,7 @@ class SA_AggregatorAgent(Agent):
         # Parameters for poison defense module
         self.l2_old = []
         self.linf_old = 0.1
-        self.linf_shprg_old = 0.05
+        self.linf_HPRF_old = 0.05
         self.b_old = 0.2
 
         self.hprf_prime = 0
@@ -443,13 +443,13 @@ class SA_AggregatorAgent(Agent):
         self.client_id_list = list(self.user_masked_vectors.keys())
 
         self.selected_indices, self.b_old = self.MMF(self.user_masked_vectors, self.l2_old, self.linf_old,
-                                                     self.linf_shprg_old, self.b_old,
+                                                     self.linf_HPRF_old, self.b_old,
                                                      self.current_iteration)
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
         self.hprf_prime = p
 
-        self.vec_sum_partial = np.zeros(self.vector_len, np.int64)
+        self.vec_sum_partial = np.zeros(self.vector_len, dtype=object)
         for id in self.selected_indices:
             if len(self.user_masked_vectors[id]) != self.vector_len:
                 raise RuntimeError("Client sent a vector with an incorrect length.")
@@ -550,19 +550,19 @@ class SA_AggregatorAgent(Agent):
         # 2. 使用恢复出的种子生成掩码向量
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
-        filename = r"matrix"
-        shprg = SHPRG(n, m, p, q, filename)
-        self.seed_sum_hprf = shprg.hprf(self.seed_sum, self.current_iteration, self.vector_len)
+        filename = r"agent\\HPRF\\matrix"
+        hprf = HPRF(n, m, p, q, filename)
+        self.seed_sum_hprf = hprf.hprf(self.seed_sum, self.current_iteration, self.vector_len)
         self.final_sum = self.vec_sum_partial - self.seed_sum_hprf
         self.final_sum %= self.hprf_prime
         # print("final_sum", self.final_sum)
         self.final_sum //= len(self.selected_indices)
         # print("final_sum", self.final_sum)
-        self.final_sum = np.array(self.final_sum, dtype=np.uint32)
+        self.final_sum = np.array(self.final_sum, dtype=object)
 
         self.l2_old = [np.linalg.norm(self.final_sum)] + self.l2_old[:1]
         self.linf_old = np.max(np.abs(self.final_sum))
-        self.linf_shprg_old = np.max(np.abs(self.seed_sum_hprf))
+        self.linf_HPRF_old = np.max(np.abs(self.seed_sum_hprf))
 
         compute_time = time.time() - compute_start
         self.timings["Aggregate share reconstruction"].append(compute_time)
@@ -588,7 +588,7 @@ class SA_AggregatorAgent(Agent):
                              tag="comm_output_server",
                              msg_name=self.msg_name)
 
-    def MMF(self, masked_updates, l2_old, linf_old, linf_shprg_old, b_old, current_round):
+    def MMF(self, masked_updates, l2_old, linf_old, linf_HPRF_old, b_old, current_round):
         """
         Function to select benign clients.
 
@@ -617,7 +617,7 @@ class SA_AggregatorAgent(Agent):
                     re.findall(r'\d+\d*', RESUMED_NAME.split('/')[1])[0]) + 3 if RESUMED_NAME else 0):
             b = list(sorted_l2_norm.values())[int(MIN_THRESHOLD * cnt)]
         else:
-            b = (l2_old[1] + linf_shprg_old) / (l2_old[0] + linf_shprg_old) * b_old
+            b = (l2_old[1] + linf_HPRF_old) / (l2_old[0] + linf_HPRF_old) * b_old
 
         # Select benign clients using the sorted dictionary
         selected_indices = []

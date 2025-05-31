@@ -6,67 +6,114 @@ from decimal import Decimal, getcontext
 
 getcontext().prec = 1024
 
-import pickle
-import os
-import random
-import numpy as np
-
 class HPRF:
     def __init__(self, n, m, p, q, filename):
-        assert p < q, "p < q"
-        assert n < m, "n < m"
+        """
+        Initializes the HPRF object.
+
+        Args:
+            n (int): Number of rows in the matrix.
+            m (int): Number of columns in the matrix.
+            p (int): The first parameter for the modulo operation.
+            q (int): The second parameter for the modulo operation.
+            filename (str): The filename to store the matrix.
+        """
+        assert p < q, "p < q"  # Ensure p is less than q
+        assert n < m, "n < m"  # Ensure n is less than m
 
         self.n = n
         self.m = m
         self.p = p
         self.q = q
         self.filename = filename
-        self.q_half = q // 2  # 预计算常量
+        self.p_float = float(p)
+        self.q_float = float(q)
+        self.p_div_q_float = self.p_float / self.q_float
 
+        # Load the matrix if the file exists
         if os.path.exists(filename):
             with open(filename, 'rb') as file:
                 A_list_of_lists = pickle.load(file)
                 self.A = A_list_of_lists
                 self.A_np = np.array(A_list_of_lists, dtype=object)
+        # Otherwise, generate a new random matrix and save it to the file
         else:
             self.A = [[random.randint(0, q - 1) for _ in range(m)] for _ in range(n)]
             self.A_np = np.array(self.A, dtype=object)
             with open(filename, 'wb') as file:
                 pickle.dump(self.A, file)
-
         
-        # 预计算列和
+        # Pre-calculate sum of columns of A
         self.A_col_sums_np = np.sum(self.A_np, axis=0, dtype=object)
 
     def G_batch(self, s_scalars_batch_np):
-        """优化后的批处理计算"""
-        # 使用广播机制计算所有 (s * col_sum) % q
-        products = (s_scalars_batch_np[:, None] * self.A_col_sums_np) % self.q
+        """
+        Batch version of G function using NumPy for better performance.
         
-        # 向量化整数运算实现四舍五入
-        result_matrix = (products * self.p + self.q_half) // self.q
-        return result_matrix.astype(object)
+        Args:
+            s_scalars_batch_np: 1D NumPy array of s_scalar values.
+            
+        Returns:
+            2D NumPy array of shape (num_s_values, m).
+        """
+        # 使用列表推导式处理大整数运算
+        result_matrix = []
+        for s in s_scalars_batch_np:
+            row = []
+            for col_sum in self.A_col_sums_np:
+                # 使用 gmpy2 处理大整数运算
+                product = (s * col_sum) % self.q
+                # 使用 Decimal 进行精确的浮点数计算
+                scaled_product = int(Decimal(str(product)) * Decimal(str(self.p_div_q_float)) + Decimal('0.5'))
+                row.append(scaled_product)
+            result_matrix.append(row)
+        return np.array(result_matrix, dtype=object)
 
-    # 其余函数保持不变
     def G(self, s):
+        """
+        Calculates the matrix product A^T * s and maps the result to the range [0, p).
+        Now uses the batch version internally for better performance.
+
+        Args:
+            s (int): The seed value.
+
+        Returns:
+            list: The mapped result vector.
+        """
         s_np = np.array([s], dtype=np.int64)
         result_matrix = self.G_batch(s_np)
         return result_matrix[0].tolist()
 
     def hprf(self, k, x, length):
+        """
+        Generates a pseudo-random sequence using batch processing for better performance.
+        
+        Args:
+            k (int): The key value.
+            x (int): The input value.
+            length (int): The desired length of the output sequence.
+            
+        Returns:
+            list: The generated pseudo-random sequence.
+        """
         if length == 0:
             return []
 
         num_s_values_to_generate = (length + self.m - 1) // self.m
+        
+        # Generate s_values
         counters = np.arange(num_s_values_to_generate, dtype=np.int64)
         py_k, py_x, py_q = int(k), int(x), int(self.q)
         s_scalars_list = [(py_k * (py_x + c_val)) % py_q for c_val in counters]
         s_scalars_np = np.array(s_scalars_list, dtype=np.int64)
 
+        # Process all s_values in a batch
         g_results_matrix = self.G_batch(s_scalars_np)
+        
+        # Flatten the matrix and take the required length
         all_output_values_np = g_results_matrix.flatten(order='C')
+        
         return all_output_values_np[:length].tolist()
-
 
     def list_hprf(self, k, x, length):
         result = []
@@ -143,9 +190,9 @@ def load_initialization_values(filename):
     
 
 if __name__ == "__main__":
-    initialization_values_filename = r"agent\HPRF\initialization_values"
+    initialization_values_filename = r"agent\\HPRF\\initialization_values"
     n, m, p, q = load_initialization_values(initialization_values_filename)
-    filename = r"agent\HPRF\matrix"
+    filename = r"agent\\HPRF\\matrix"
     hprf = HPRF(n, m, p, q, filename)
     
     # 测试参数
