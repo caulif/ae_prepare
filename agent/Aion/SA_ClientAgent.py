@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from agent.Agent import Agent
@@ -16,7 +17,7 @@ from util import param
 from util import util
 from util.crypto.secretsharing.vss import VSS
 
-from agent.Aion.tool import *
+# from agent.Aion.tool import *
 from agent.Aion.bft import BFTProtocol, BFTMessage
 import gmpy2
 
