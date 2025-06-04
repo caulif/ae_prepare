@@ -12,12 +12,12 @@ vector_len = 10000
 vector_type = 'uint32'
 
 # committee_size = 8
-# fraction = 1 / 3
-# fixed_key = b"abcd"
+fraction = 1 / 3
+fixed_key = b"abcd"
 
 prime_bits = 2048
 prime = sympy.randprime(2 ** (prime_bits - 1), 2 ** prime_bits)  # Generate a large prime number
-
+SECRET_SHARING_PRIME = prime
 
 wt_Aion_report = pd.Timedelta('10s')
 wt_Aion_crosscheck = pd.Timedelta('3s')
