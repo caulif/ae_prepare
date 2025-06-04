@@ -13,7 +13,6 @@ import sys
 from Cryptodome.Hash import SHA256
 from Cryptodome.Util.number import bytes_to_long, long_to_bytes
 import sympy
-from secretsharing.polynomials import random_polynomial, get_polynomial_points, mod_inverse
 from secretsharing.primes import get_large_enough_prime
 import gmpy2
 import time

@@ -17,12 +17,12 @@ def generate_ecc_key_pair(node_id):
         f.write(key.public_key().export_key(format='PEM').encode('utf-8'))
 
 def main():
-    # Ensure pki_files directory exists
-    if not os.path.exists('pki_files'):
-        os.makedirs('pki_files')
+    # # Ensure pki_files directory exists
+    # if not os.path.exists('pki_files'):
+    #     os.makedirs('pki_files')
     
-    # Change to pki_files directory
-    os.chdir('pki_files')
+    # # Change to pki_files directory
+    # os.chdir('pki_files')
     
     # Generate key pair for server
     generate_ecc_key_pair(0)
@@ -32,6 +32,30 @@ def main():
         generate_ecc_key_pair(i)
     
     print("Key pairs generation completed!")
+
+    from Cryptodome.PublicKey import ECC
+
+    # generate server key
+    key = ECC.generate(curve='P-256')
+    f = open('server_key.pem', 'wt')
+    f.write(key.export_key(format='PEM'))
+    f.close()
+
+    # system-wide pk
+    key = ECC.generate(curve='P-256')
+    f = open('system_pk.pem', 'wt')
+    f.write(key.export_key(format='PEM'))
+    f.close()
+
+    # generate client keys
+    for i in range (512):
+        key = ECC.generate(curve='P-256')
+        hdr = 'client'+str(i)+'.pem'
+        f = open(hdr, 'wt')
+        f.write(key.export_key(format='PEM'))
+        f.close()
+
+
 
 if __name__ == "__main__":
     main()

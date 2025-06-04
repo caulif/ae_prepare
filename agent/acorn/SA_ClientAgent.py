@@ -7,7 +7,7 @@ from Cryptodome.Hash import SHA256
 from Cryptodome.PublicKey import ECC
 from Cryptodome.Signature import DSS
 
-from util.crypto.secretsharing import secret_int_to_points, points_to_secret_int
+from util.crypto.secretsharing.sharing import secret_int_to_points, points_to_secret_int
 from util import param
 from util.crypto import ecchash
 
@@ -28,7 +28,7 @@ from Cryptodome.PublicKey import ECC
 from Cryptodome.Cipher import AES
 from Cryptodome.Random import get_random_bytes
 
-# 导入zkp模块
+# Import zkp module
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'zkp'))
@@ -53,8 +53,8 @@ class SA_ClientAgent(Agent):
                  max_input=10000,
                  key_length=256,
                  num_clients=None,
-                 num_neighbors=-1,
-                 threshold=-1,
+                 num_neighbors=8,
+                 threshold=-2,
                  debug_mode=0,
                  random_state=None,
                  vector_len=1024):
@@ -211,7 +211,7 @@ class SA_ClientAgent(Agent):
                                       "sender": self.id,
                                       "pubkey": self.public_key,
                                       }),
-                             tag="pubkey_to_server", stage="ADKEY")
+                             tag="pubkey_to_server")
 
         
 
@@ -241,7 +241,7 @@ class SA_ClientAgent(Agent):
                                       "sender": self.id,
                                       "choice": self.neighbors_out,
                                       }),
-                             tag="choice_to_server", stage="GRAPH")
+                             tag="choice_to_server")
 
             if __debug__: 
                 self.logger.info(f"Client {self.id} time for processing CHOICE: {pd.Timestamp('now') - dt_protocol_start}")
@@ -298,7 +298,7 @@ class SA_ClientAgent(Agent):
                                       "range_proof": self.range_proof,  # 添加范围证明
                                       "range_proof_commitment": self.range_proof_commitment,  # 添加范围证明承诺
                                       }),
-                             tag="choice_to_server", stage="SHARE")
+                             tag="choice_to_server")
             
             if __debug__:
                 self.logger.info(f"Client {self.id} time for processing BACKUP (secret shares): {pd.Timestamp('now') - dt_protocol_start}")
@@ -394,7 +394,7 @@ class SA_ClientAgent(Agent):
                                       "sender": self.id,
                                       "vector": self.vec,
                                       }),
-                             tag="vector_to_server", stage="COLLECTION")
+                             tag="vector_to_server")
 
                                  
                 # Accumulate into offline setup.
@@ -430,7 +430,7 @@ class SA_ClientAgent(Agent):
                                       "sender": self.id,
                                       "ack": ack_sig,
                                       }),
-                             tag="shares_to_server", stage="CROSSCHECK")
+                             tag="shares_to_server")
             
                 if __debug__: 
                     self.logger.info(f"Client {self.id} time for processing ACK: {pd.Timestamp('now') - dt_protocol_start}")
@@ -480,7 +480,7 @@ class SA_ClientAgent(Agent):
                                       "shares_of_mi": send_mi_shares,
                                       "shares_of_ai": send_ai_shares, 
                                       }),
-                             tag="shares_to_server", stage="RECONSTRUCTION")
+                             tag="shares_to_server")
 
             
                     if __debug__:
@@ -530,7 +530,7 @@ class SA_ClientAgent(Agent):
                                       "sender": self.id,
                                       "pubkey": self.public_key,
                                       }),
-                             tag="pubkey_to_server", stage="ADKEY")
+                             tag="pubkey_to_server")
 
             if __debug__:
                 self.logger.info(f"Client {self.id} time for processing PUBKEYS (generate new): {pd.Timestamp('now') - dt_protocol_start}")
@@ -627,21 +627,21 @@ class SA_ClientAgent(Agent):
 
     def _generate_range_proof(self, value):
         """
-        生成范围证明，证明value在[0, 2^n-1]范围内
+        Generate range proof to prove value is in [0, 2^n-1]
         """
-        # 检查值是否在范围内
+        # Check if value is within range
         max_value = (1 << self.n) - 1
         if value > max_value:
             value = value & max_value
         
-        # 将value转换为ModP类型
+        # Convert value to ModP type
         v = ModP(value, self.p)
         
-        # 创建承诺
+        # Create commitment
         V = commitment(self.g, self.h, v, self.gamma)
         self.range_proof_commitment = V
         
-        # 创建范围证明
+        # Create range proof
         prover = AggregNIRangeProver([v], self.n, self.g, self.h, self.gs, self.hs, [self.gamma], self.u, self.CURVE, self.seeds[6])
         self.range_proof = prover.prove()
         

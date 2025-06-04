@@ -440,7 +440,7 @@ class SA_AggregatorAgent(Agent):
         self.selected_indices, self.b_old = self.MMF(self.user_masked_vectors, self.l2_old, self.linf_old,
                                                      self.linf_HPRF_old, self.b_old,
                                                      self.current_iteration)
-        initialization_values_filename = r"agent\\Aion\\HPRF\\initialization_values"
+        initialization_values_filename = os.path.join("agent", "Aion", "HPRF", "initialization_values")
         n, m, p, q = load_initialization_values(initialization_values_filename)
         self.hprf_prime = p
 
@@ -542,9 +542,9 @@ class SA_AggregatorAgent(Agent):
 
         
         # 2. Generate mask vector using recovered seed
-        initialization_values_filename = r"agent\\Aion\\HPRF\\initialization_values"
+        initialization_values_filename = os.path.join("agent", "Aion", "HPRF", "initialization_values")
         n, m, p, q = load_initialization_values(initialization_values_filename)
-        filename = r"agent\\Aion\\HPRF\\matrix"
+        filename = os.path.join("agent", "Aion", "HPRF", "matrix")
         hprf = HPRF(n, m, p, q, filename)
         self.seed_sum_hprf = hprf.hprf(self.seed_sum, self.current_iteration, self.vector_len)
         self.final_sum = self.vec_sum_partial - self.seed_sum_hprf

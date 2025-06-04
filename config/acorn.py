@@ -1,7 +1,7 @@
 # malicious version
 from Kernel import Kernel
-from agent.secagg_plus.SA_ClientAgent import SA_ClientAgent as ClientAgent
-from agent.secagg_plus.SA_ServiceAgent import SA_ServiceAgent as ServiceAgent
+from agent.acorn.SA_ClientAgent import SA_ClientAgent as ClientAgent
+from agent.acorn.SA_ServiceAgent import SA_ServiceAgent as ServiceAgent
 from model.LatencyModel import LatencyModel
 from util import util
 from util import param
@@ -39,9 +39,9 @@ parser.add_argument('--vector_len', type=int, default=10000,
                     help='Length of the vector for each client'),
 parser.add_argument('-n', '--num_clients', type=int, default=5,
                     help='Number of clients for the secure multiparty protocol)')
-parser.add_argument('--num_neighbors', type=int, default=-1,
+parser.add_argument('--num_neighbors', type=int, default=8,
                     help='Number of neighbors a client has')
-parser.add_argument('--neighbor_threshold', type=int, default=-1,
+parser.add_argument('--neighbor_threshold', type=int, default=2,
                     help='The threshold for each individual client')
 parser.add_argument('--round_time', type=int, default=10,
                     help='Fixed time the server waits for one round')
@@ -289,33 +289,3 @@ print (f"    Crosscheck step:     {results['clt_crosscheck'] / num_clients}")
 print (f"    Reconstruction step: {results['clt_reconstruction'] / num_clients}")
 print ()
 
-
-def td2s(x):
-    # 如果是Timedelta类型，转为秒，否则直接返回
-    return round(x.total_seconds(), 6) if hasattr(x, 'total_seconds') else round(float(x), 6)
-
-performance_data = {
-    '指标类型': ['服务端', '服务端', '服务端', '服务端', '服务端', '服务端', 
-              '客户端', '客户端', '客户端', '客户端', '客户端', '客户端'],
-    '步骤': ['Advertising keys', 'Establishing graph', 'Backup shares', 
-           'Report step', 'Crosscheck step', 'Reconstruction step',
-           'Advertising keys', 'Establishing graph', 'Backup shares',
-           'Report step', 'Crosscheck step', 'Reconstruction step'],
-    '平均时间(秒)': [
-        td2s(results['srv_adkey']), td2s(results['srv_graph']), td2s(results['srv_share']),
-        td2s(results['srv_collection']), td2s(results['srv_crosscheck']), td2s(results['srv_reconstruction']),
-        td2s(results['clt_adkey']), td2s(results['clt_graph']), td2s(results['clt_share']) / num_clients,
-        td2s(results['clt_collection']) / num_clients, td2s(results['clt_crosscheck']) / num_clients, 
-        td2s(results['clt_reconstruction']) / num_clients
-    ]
-}
-
-# 创建DataFrame
-df = pd.DataFrame(performance_data)
-
-# 生成文件名（使用命令行参数和素数位数）
-filename = f"performance_metrics_{args.config}_{num_clients}clients_{num_iterations}iterations_{param.prime_bits}bits_server{args.num_neighbors}_params{args.vector_len}.xlsx"
-
-# 保存到Excel文件
-df.to_excel(filename, index=False)
-print(f"\n性能指标已保存到文件: {filename}")

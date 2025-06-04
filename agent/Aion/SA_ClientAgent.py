@@ -1,5 +1,5 @@
 import numpy as np
-import torch
+import os
 
 from agent.Agent import Agent
 from .HPRF.hprf import load_initialization_values, HPRF
@@ -317,9 +317,9 @@ class SA_ClientAgent(Agent):
         # Only count local computation time
         compute_start = time.time()
         
-        initialization_values_filename = r"agent\\Aion\\HPRF\\initialization_values"
+        initialization_values_filename = os.path.join("agent", "Aion", "HPRF", "initialization_values")
         n, m, p, q = load_initialization_values(initialization_values_filename)
-        filename = r"agent\\Aion\\HPRF\\matrix"
+        filename = os.path.join("agent", "Aion", "HPRF", "matrix")
         hprf = HPRF(n, m, p, q, filename)
         mask_vector = hprf.hprf(self.mask_seed, self.current_iteration, self.vector_len)
         mask_vector = np.array(mask_vector, dtype=np.float64)

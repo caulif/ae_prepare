@@ -20,14 +20,14 @@ import random
 
 from util import param
 from util.crypto import ecchash
-from util.crypto.secretsharing import secret_int_to_points, points_to_secret_int
+from util.crypto.secretsharing.sharing import secret_int_to_points, points_to_secret_int
 
 from Cryptodome.PublicKey import ECC
 from Cryptodome.Cipher import AES
 from Cryptodome.Random import get_random_bytes
 from Cryptodome.Hash import SHA256
 
-# 导入zkp模块
+# Import zkp module
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'zkp'))
@@ -57,8 +57,8 @@ class SA_ServiceAgent(Agent):
                  field_size=-1,
                  iterations=4,
                  num_clients=10,
-                 num_neighbors=-1,
-                 neighbor_threshold=-1,
+                 num_neighbors=8,
+                 neighbor_threshold=2,
                  users={},
                  debug_mode=0,
                  max_input=10000,
@@ -375,7 +375,7 @@ class SA_ServiceAgent(Agent):
                                       "sender": 0,
                                       "active_pubkey_clients": list(self.user_pubkeys.keys()),
                                       }),
-                             tag="comm_active_clients", stage="ADKEY")
+                             tag="comm_active_clients")
         
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
         print("Server time for advertise_keys:", server_comp_delay)
@@ -467,7 +467,7 @@ class SA_ServiceAgent(Agent):
                                       "neighbors_pubkeys": neighbors_pubkeys[id],
                                       "active_choice_clients": list(self.user_choice.keys()),
                                       }),
-                             tag="comm_graph_server", stage="GRAPH")
+                             tag="comm_graph_server")
         
         
         self.current_round = 3
@@ -572,7 +572,7 @@ class SA_ServiceAgent(Agent):
                                       "backup_shares_ai": forward_shares_ai[id],
                                       "backup_shares_mi": forward_shares_mi[id],
                                       }),
-                             tag="comm_graph_server", stage="SHARE")
+                             tag="comm_graph_server")
 
         self.current_round = 4
 
@@ -624,7 +624,7 @@ class SA_ServiceAgent(Agent):
                                       "request_ack": 1,
                                       "alive_set": self.user_vectors,
                                       }),
-                             tag="comm_ack_server", stage="COLLECTION")
+                             tag="comm_ack_server")
 
 
         self.current_round = 5
@@ -700,7 +700,7 @@ class SA_ServiceAgent(Agent):
                                       "request_mi_shares": request_mi_shares,
                                       "request_ai_shares": request_ai_shares,
                                       }),
-                             tag="comm_dec_server", stage="CROSSCHECK")
+                             tag="comm_dec_server")
 
         self.current_round = 6
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
@@ -829,43 +829,44 @@ class SA_ServiceAgent(Agent):
                                       "sender": 0,
                                       "output": 1,
                                       }),
-                             tag="comm_output_server", stage="RECONSTRUCTION")
+                             tag="comm_output_server")
 
         self.setWakeup(currentTime + server_comp_delay + param.wt_google_adkey)
 
     def _verify_range_proofs(self):
         """
-        验证所有客户端的范围证明
+        Verify range proofs for all clients
         
-        使用批量验证技术加速验证过程，大大提高多客户端情况下的验证效率
+        Use batch verification technology to accelerate the verification process,
+        greatly improving verification efficiency in multi-client scenarios
         """
-        # 检查是否有证明需要验证
+        # Check if there are proofs to verify
         if not self.range_proofs or not self.range_proof_commitments:
-            print("没有范围证明需要验证")
+            print("No range proofs to verify")
             return
             
-        # 输出验证的证明数量
+        # Output number of proofs to verify
         proof_count = len(self.range_proofs)
-        print(f"开始验证 {proof_count} 个范围证明...")
+        print(f"Starting verification of {proof_count} range proofs...")
         
-        # 设置一个标志，指示是否强制使用传统验证方法
+        # Set a flag indicating whether to force using traditional verification method
         use_traditional = False
         
         if not use_traditional:
             try:
-                # 使用批量验证器
+                # Use batch verifier
                 from agent.acorn.utils.batch_verifier import BatchRangeVerifier
                 
-                # 开始计时
+                # Start timing
                 time_start = time.time()
                 
-                # 准备批量验证数据
+                # Prepare batch verification data
                 verifications_data = []
                 
                 for client_id, proof in self.range_proofs.items():
                     if client_id in self.range_proof_commitments:
                         commitment = self.range_proof_commitments[client_id]
-                        # 准备该证明的验证数据
+                        # Prepare verification data for this proof
                         verifications_data.append({
                             'Vs': [commitment],
                             'g': self.g,
@@ -877,37 +878,37 @@ class SA_ServiceAgent(Agent):
                             'client_id': client_id
                         })
                 
-                # 如果没有可验证的数据，返回
+                # If no valid data to verify, return
                 if not verifications_data:
-                    print("没有有效的范围证明数据可验证")
+                    print("No valid range proof data to verify")
                     return
                     
-                # 执行批量验证
+                # Execute batch verification
                 batch_verifier = BatchRangeVerifier()
                 is_valid = batch_verifier.batch_verify(verifications_data)
                 
-                # 结束计时
+                # End timing
                 time_end = time.time()
-                print(f"批量验证 {len(verifications_data)} 个范围证明耗时: {time_end - time_start:.4f} 秒")
+                print(f"Batch verification of {len(verifications_data)} range proofs took: {time_end - time_start:.4f} seconds")
                 
                 if not is_valid:
-                    print("批量验证失败，切换到传统验证方法...")
+                    print("Batch verification failed, switching to traditional verification method...")
                     use_traditional = True
                 else:
-                    # 批量验证成功，直接返回
+                    # Batch verification successful, return directly
                     return
                     
             except Exception as e:
-                print(f"批量验证过程中出现错误: {str(e)}")
-                print("切换到传统验证方法...")
+                print(f"Error during batch verification: {str(e)}")
+                print("Switching to traditional verification method...")
                 use_traditional = True
         
-        # 如果批量验证失败或被跳过，使用传统的逐个验证方法
+        # If batch verification failed or was skipped, use traditional individual verification method
         if use_traditional:
             time_start = time.time()
             
-            # 传统验证方法
-            print("使用传统方法逐个验证...")
+            # Traditional verification method
+            print("Using traditional method for individual verification...")
             for client_id, proof in self.range_proofs.items():
                 if client_id in self.range_proof_commitments:
                     commitment = self.range_proof_commitments[client_id]
@@ -915,10 +916,10 @@ class SA_ServiceAgent(Agent):
                     try:
                         verifier.verify()
                     except Exception as e:
-                        raise ValueError(f"客户端 {client_id} 范围证明验证失败: {e}")
+                        raise ValueError(f"Range proof verification failed for client {client_id}: {e}")
                         
             time_end = time.time()
-            print(f"传统验证 {proof_count} 个范围证明耗时: {time_end - time_start:.4f} 秒")
+            print(f"Traditional verification of {proof_count} range proofs took: {time_end - time_start:.4f} seconds")
 
     def _verify_inner_product_proofs(self):
         """

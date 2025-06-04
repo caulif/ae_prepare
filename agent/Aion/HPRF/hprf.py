@@ -57,10 +57,10 @@ class HPRF:
             return []
 
         num_s_values_to_generate = (length + self.m - 1) // self.m
-        counters = np.arange(num_s_values_to_generate, dtype=np.int64)
+        counters = np.arange(num_s_values_to_generate, dtype=object)
         py_k, py_x, py_q = int(k), int(x), int(self.q)
         s_scalars_list = [(py_k * (py_x + c_val)) % py_q for c_val in counters]
-        s_scalars_np = np.array(s_scalars_list, dtype=np.int64)
+        s_scalars_np = np.array(s_scalars_list, dtype=object)
 
         g_results_matrix = self.G_batch(s_scalars_np)
         all_output_values_np = g_results_matrix.flatten(order='C')
