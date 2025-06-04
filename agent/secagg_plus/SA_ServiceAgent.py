@@ -20,14 +20,11 @@ import random
 
 from util import param
 from util.crypto import ecchash
-# from util.crypto.secretsharing import secret_int_to_points, points_to_secret_int
-from util.crypto.secretsharing.simple_sharing import share_secret, reconstruct_secret
+from util.crypto.secretsharing.sharing import secret_int_to_points, points_to_secret_int
 
 from Cryptodome.PublicKey import ECC
 from Cryptodome.Cipher import AES
 from Cryptodome.Random import get_random_bytes
-from Cryptodome.Signature import DSS
-from Cryptodome.Hash import SHA256
 
 
 # Secret sharing for each client and the server
@@ -53,8 +50,7 @@ class SA_ServiceAgent(Agent):
                  neighbor_threshold=-1,
                  users={},
                  debug_mode=0,
-                 max_input=10000,
-                 vector_len=1024):
+                 max_input=10000):
 
         # Base class init.
         super().__init__(id, name, type, random_state)
@@ -66,12 +62,10 @@ class SA_ServiceAgent(Agent):
 
         # Set parameters
         self.num_clients = num_clients
-        self.vector_len = vector_len
+        self.vector_len = 1024
         self.vector_dtype = 'uint32'
         self.vec_sum_partial = np.zeros(self.vector_len, dtype=self.vector_dtype)
         self.prime = ecchash.n
-        # 添加秘密分享使用的素数
-        self.secret_sharing_prime = param.SECRET_SHARING_PRIME
 
         self.system_sk = None
         hdr = 'pki_files/system_pk.pem'
@@ -130,11 +124,6 @@ class SA_ServiceAgent(Agent):
         self.recon_index = {}
         self.recv_recon_index = {}
         
-        # 添加一致性检查相关变量
-        self.consistency_signatures = {}
-        self.recv_consistency_signatures = {}
-        self.proposed_online_set = set()
-        self.proposed_offline_set = set()
        
         # Track the current iteration and round of the protocol.
         self.current_iteration = 1
@@ -149,8 +138,7 @@ class SA_ServiceAgent(Agent):
             3: self.forward_shares,
             4: self.collection,
             5: self.check_alive,
-            6: self.consistency_check,
-            7: self.reconstruction,
+            6: self.reconstruction,
         }
 
         self.namedict = {
@@ -160,8 +148,7 @@ class SA_ServiceAgent(Agent):
             3: "forward_shares",
             4: "collection",
             5: "check_alive",
-            6: "consistency_check",
-            7: "reconstruction",
+            6: "reconstruction",
         }
     # Simulation lifecycle messages.
 
@@ -309,15 +296,6 @@ class SA_ServiceAgent(Agent):
             
             self.recordTime(dt_protocol_start, "RECONSTRUCTION")
 
-        elif msg.body['msg'] == "CONSISTENCY_SIG":
-            dt_protocol_start = pd.Timestamp('now')
-            
-            if msg.body['iteration'] == self.current_iteration:
-                # 收集客户端的签名确认
-                self.recv_consistency_signatures[sender_id] = msg.body['signature']
-            
-            self.recordTime(dt_protocol_start, "CROSSCHECK")
-
     # NOTE: the currentTime is the 'start' of the function
 
     # Processing and replying the messages.
@@ -383,26 +361,58 @@ class SA_ServiceAgent(Agent):
     def establish_graph(self, currentTime):
         dt_protocol_start = pd.Timestamp('now')
         self.establish_graph_read_from_pool()
+        # Server should know a complete graph, who is whose neighbors
       
         print("Server collected #graph choice =", len(self.recv_user_choice))
 
-        # 修改为全连接图
+        # if set(self.user_choice.keys()) != set(self.user_pubkeys.keys()):
+        #     print("user pubkeys:", set(self.user_pubkeys.keys()))
+        #     print("user choice:", set(self.user_choice.keys()))
+        #     print("The waiting time is not enough: not all required users send their choices.")
+        #     exit(1)
+
+        # an optimized heuristic version:
+        # for those who does not send choice, remove those from a client's neighbors_out
+
+        neighbors_in = {}
+
+        # store neighbors of each client.
+        # neighbors[i] is the neighbors of client i.
         self.neighbors = {}  
+
         for i in self.user_choice:
-            # 每个客户端与所有其他客户端连接
-            self.neighbors[i] = set(self.user_choice.keys())
-            if i in self.neighbors[i]:
-                self.neighbors[i].remove(i)
+            tmp = set()
+            # find who chose i
+            for j in self.user_choice:
+                if i in self.user_choice[j] and j != i:
+                    tmp.add(j)
+            neighbors_in[i] = tmp
+
+            # remove those who are not in user_choice.keys() from user_choice[i]
+            # find those who are in user_choice but not in user_pubkeys
+
+            for straggler in set(self.users)-set(self.user_choice.keys()):
+                if straggler in self.user_choice[i]:
+                    self.user_choice[i].remove(straggler)
+            
+            self.neighbors[i] = (neighbors_in[i]).union(self.user_choice[i])
+            # print("client", i, "has neighbors =", self.neighbors[i])
+        
+        # at this point, the server should know the complete graph
 
         # neighbors_pubkeys[i] stores client i's neighbors pubkeys
         neighbors_pubkeys = {}
         for id in self.user_choice:
-            # 为每个客户端提供所有其他客户端的公钥
-            tmpls = {}
+            # for each active user, give related pubkeys to them
+            tmpls = {}  # each element: (neighbor id, pubkey)
             for j in self.neighbors[id]:
                 tmpls[j] = self.user_pubkeys[j]
             neighbors_pubkeys[id] = tmpls
 
+      
+        # when sending the graph, also send related pubkeys.
+        # for a client, pubkeys include its neighbors_in and neighbors_out
+        
         print("number of active choice clients:", len(self.user_choice.keys()))
 
         for id in self.user_choice:
@@ -416,6 +426,7 @@ class SA_ServiceAgent(Agent):
                                       }),
                              tag="comm_graph_server")
         
+        
         self.current_round = 3
 
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
@@ -423,6 +434,7 @@ class SA_ServiceAgent(Agent):
 
         self.recordTime(dt_protocol_start, "GRAPH")
 
+        # print serialization size:
         if __debug__:
             tmp_pubkeys = {}
             for i in self.user_choice:
@@ -434,6 +446,8 @@ class SA_ServiceAgent(Agent):
                 tmp_neighbor_ids[i] = self.neighbors[i] 
             self.logger.info(f"Server graph choice comm cost: {len(dill.dumps(tmp_pubkeys)) + len(dill.dumps(tmp_neighbor_ids))}")
        
+         # Here the server should wait a sufficient time to
+         # ensure all user_choice received messages.
         self.setWakeup(currentTime + server_comp_delay + param.wt_google_share) 
     
     def forward_signatures_read_from_pool(self):
@@ -452,31 +466,50 @@ class SA_ServiceAgent(Agent):
         dt_protocol_start = pd.Timestamp('now')
         self.forward_signatures_read_from_pool()
 
-        # 修改为全连接图下的份额转发
-        forward_shares_ai = {}
-        forward_shares_mi = {}
+        # ai_shares is a list of length = number of neighbors
+        # the server will send each point in ai_shares to each of the client's neighbors
         
-        # 初始化所有客户端的份额存储
+
+        # forward_shares_ai[id] is shares to be forwarded to client id.
+        # forward_shares_ai[id] is a dictionary,
+        #   where forward shares_ai[id][neighbor_id] is a share (point) stored
+        #   at client id for neighbors_id
+
+        #       neighbor_id, share point (x, y)
+        #       neighbor_id, share point (x, y)
+        #  id     ...
+        #       neighbor_id, share point (x, y)
+        #       neighbor_id, share point (x, y)
+
+        forward_shares_ai = {}
         for i in self.backup_shares_ai:
             for j in self.neighbors[i]:
-                if j not in forward_shares_ai:
-                    forward_shares_ai[j] = {}
-                if j not in forward_shares_mi:
-                    forward_shares_mi[j] = {}
+                forward_shares_ai[j] = {}   # might be repeatedly initialize, but it's ok
 
-        # 分配份额
         for i in self.backup_shares_ai:
             if len(self.neighbors[i]) != len(self.backup_shares_ai[i]):
                 raise ValueError("#of shares does not match #neighbors.")
             cnt = 0
             for j in self.neighbors[i]:
                 forward_shares_ai[j][i] = self.backup_shares_ai[i][cnt]
+                cnt += 1
+           
+        forward_shares_mi = {}
+        for i in self.backup_shares_mi:
+            for j in self.neighbors[i]:
+                forward_shares_mi[j] = {}   # might be repeatedly initialize, but it's ok
+
+        for i in self.backup_shares_mi:
+            if len(self.neighbors[i]) != len(self.backup_shares_mi[i]):
+                raise ValueError("#of shares does not match #neighbors.")
+            cnt = 0
+            for j in self.neighbors[i]:
                 forward_shares_mi[j][i] = self.backup_shares_mi[i][cnt]
                 cnt += 1
 
         self.forward_signatures_clear_pool()
 
-        # 请求向量
+        # at the same time of sending shares, request for vector
         for id in self.user_choice:
             self.sendMessage(id,
                              Message({"msg": "REQ_VECTOR",
@@ -494,6 +527,7 @@ class SA_ServiceAgent(Agent):
 
         self.recordTime(dt_protocol_start, "SHARE")
 
+        # print seralize size:
         if __debug__:
             tmp_shares = {}
             for i in self.user_choice:
@@ -573,11 +607,12 @@ class SA_ServiceAgent(Agent):
             for recvr in self.ack[sender]:
                 in_neighbors_ack[recvr][sender] = self.ack[sender][recvr]
         
+
         self.online_set = set(self.user_vectors.keys())
-        # print("online clients:", len(self.online_set))
+        print("online clients:", len(self.online_set))
 
         self.offline_set = set(self.user_choice) - set(self.online_set)
-        # print("offline clients:", len(self.offline_set))
+        print("offline clients:", len(self.offline_set))
 
         # request_mi_shares[id] is a list, storing neighbors to be request 
         # id will receive this, and send to the server the shares of the requested neighbors
@@ -599,7 +634,8 @@ class SA_ServiceAgent(Agent):
         for i in self.offline_set:
             for j in self.neighbors[i]:
                 request_ai_shares[j].append(i)
-        
+       
+
         self.check_alive_clear_pool()
 
         for id in self.user_vectors:
@@ -639,23 +675,13 @@ class SA_ServiceAgent(Agent):
         dt_protocol_start = pd.Timestamp('now')
         self.reconstruction_read_from_pool()
 
-        # 验证一致性签名
-        if len(self.recv_consistency_signatures) < len(self.user_vectors):
-            print("Not enough consistency signatures received")
-            # return
+        # recon_shares_mi:
+        #                  id, share
+        #   sender_id      id, share
+        #                  id, share
 
-        # 验证每个签名
-        for id in self.recv_consistency_signatures:
-            if id not in self.user_pubkeys:
-                continue
-            # try:
-            #     verifier = DSS.new(self.user_pubkeys[id], 'fips-186-3')
-            #     consistency_msg = str.encode(str(id) + str(sorted(self.proposed_online_set)) + str(sorted(self.proposed_offline_set)))
-            #     h = SHA256.new(consistency_msg)
-            #     verifier.verify(h, self.recv_consistency_signatures[id])
-            # except:
-                # print(f"Invalid consistency signature from client {id}")
-                # return
+        # the server needs to extract shares for one id, 
+        #   and reconstruct mi for this id.
 
         """Reconstruct mi for client i."""
         for i in self.online_set:
@@ -663,53 +689,35 @@ class SA_ServiceAgent(Agent):
             for j in self.recon_shares_mi:
                 if i in self.recon_shares_mi[j]:
                     mi_shares.append(self.recon_shares_mi[j][i])
+            # if len(mi_shares) == 0:
+            #     continue
+            mi_recon, _ = points_to_secret_int(mi_shares, prime=self.prime, isecc=0)
+            # should be 16 bytes, but not mi is not correctly reconstructed
+            mi_bytes = (mi_recon&((1<<128)-1)).to_bytes(16, 'big')
             
-            if len(mi_shares) < math.ceil(len(self.neighbors[i]) / 2):
-                print(f"Not enough shares to reconstruct mi for client {i}")
-                continue
-                
-            # 使用简单秘密分享重建mi
-            mi_recon = reconstruct_secret(mi_shares, self.secret_sharing_prime)
-            # print(f"\n=== 服务器重建客户端 {i} 的个体掩码种子 ===")
-            # print(f"重建的个体掩码种子: {mi_recon}")
-            
-            # 将重建的mi转换为16字节用于PRG
-            mi_bytes = (mi_recon & ((1 << 128) - 1)).to_bytes(16, 'big')
-            # print(f"重建的个体掩码种子(hex): {mi_bytes.hex()}")
-            
-            # 使用mi_bytes生成PRG
             prg_mi_holder = AES.new(mi_bytes, AES.MODE_CBC, iv=b"0123456789abcdef")
             data = param.fixed_key * self.vector_len
             prg_mi = prg_mi_holder.encrypt(data)
-            
-            # 将PRG输出转换为向量
+                
             vec_prg_mi = np.frombuffer(prg_mi, dtype=self.vector_dtype)
-            # print(f"重建的个体掩码向量: {vec_prg_mi}")
 
-            # 从部分和中减去个体掩码
             self.vec_sum_partial = self.vec_sum_partial - vec_prg_mi
-            # print(f"服务器减去客户端 {i} 的掩码向量: {vec_prg_mi[:5]}...")
 
+       
         for i in self.offline_set:
             ai_shares = []
             for j in self.recon_shares_ai:
                 if i in self.recon_shares_ai[j]:
                     ai_shares.append(self.recon_shares_ai[j][i])
 
-            if len(ai_shares) < math.ceil(len(self.neighbors[i]) / 2):
-                print(f"Not enough shares to reconstruct ai for client {i}")
-                continue
+            ai_recon, _ = points_to_secret_int(ai_shares, prime=self.prime, isecc=0)
 
-            # 使用secret_sharing_prime进行重建
-            ai_recon = reconstruct_secret(ai_shares, self.secret_sharing_prime)
-
-            # 计算与所有在线客户端的成对密钥
+            # compute pairwise key from ai and all other online client's pubkeys
             pairwise_keys = {}
-            for j in self.online_set:
-                if j != i:
-                    pairwise_keys[j] = int(ai_recon) * self.user_pubkeys[j]
+            for j in self.neighbors[i]:  # change to neighbors
+                pairwise_keys[j] = ai_recon * self.user_pubkeys[j]
             
-            # 计算掩码
+            # compute masks
             prg_pairwise = {}
             vec_prg_pairwise = {}
             for j in pairwise_keys:
@@ -721,7 +729,7 @@ class SA_ServiceAgent(Agent):
                 prg_pairwise[j] = prg_pairwise_holder.encrypt(data)                
                 vec_prg_pairwise[j] = np.frombuffer(prg_pairwise[j], dtype=self.vector_dtype)
                     
-                # 解掩码向量
+                # unmask vector with PRG(r_ij)
                 if len(vec_prg_pairwise[j]) != self.vector_len:
                     raise ValueError("vector length error")
                 if i < j:
@@ -730,15 +738,16 @@ class SA_ServiceAgent(Agent):
                     self.vec_sum_partial = self.vec_sum_partial - vec_prg_pairwise[j]
                 else:
                     raise ValueError("self.id =", self.id, " should not appear in neighbors", self.neighbors)
-
-        self.vec_sum_partial = self.vec_sum_partial / len(self.online_set)
+   
+   
+        # print("final sum =", self.vec_sum_partial)
 
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
         print("Server time for reconstruction:", server_comp_delay)
 
         self.recordTime(dt_protocol_start, "RECONSTRUCTION")
 
-        if __debug__:
+        if __debug__: # print serialization size
             tmp_recon_ai = {}
             for i in self.recon_shares_ai:
                 tmp_recon_ai[i] = {}
@@ -757,6 +766,7 @@ class SA_ServiceAgent(Agent):
         print(f"[Server] finished iteration {self.current_iteration} at {currentTime + server_comp_delay}")
         print()
         
+
         # Reset iteration variables before sending REQ
         self.current_round = 1
 
@@ -778,33 +788,6 @@ class SA_ServiceAgent(Agent):
                              tag="comm_output_server")
 
         self.setWakeup(currentTime + server_comp_delay + param.wt_google_adkey)
-
-    def consistency_check(self, currentTime):
-        dt_protocol_start = pd.Timestamp('now')
-        
-        # 收集所有客户端的在线/离线状态
-        self.proposed_online_set = set(self.user_vectors.keys())
-        self.proposed_offline_set = set(self.user_choice.keys()) - self.proposed_online_set
-        
-        # 向所有客户端广播提议的在线/离线集合
-        for id in self.user_choice:
-            self.sendMessage(id,
-                             Message({"msg": "REQ_CONSISTENCY",
-                                      "iteration": self.current_iteration,
-                                      "proposed_online_set": list(self.proposed_online_set),
-                                      "proposed_offline_set": list(self.proposed_offline_set),
-                                      }),
-                             tag="comm_consistency_server")
-        
-        self.current_round = 7  # 移动到重建轮
-        
-        server_comp_delay = pd.Timestamp('now') - dt_protocol_start
-        print("Server time for consistency check:", server_comp_delay)
-        
-        self.recordTime(dt_protocol_start, "CROSSCHECK")
-        
-        self.setWakeup(currentTime + server_comp_delay + param.wt_google_recontruction)
-
 
 
 # ======================== UTIL ========================

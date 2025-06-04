@@ -1,9 +1,9 @@
 # malicious version
 from Kernel import Kernel
-from agent.secagg.SA_ClientAgent import SA_ClientAgent as ClientAgent
-from agent.secagg.SA_ServiceAgent import SA_ServiceAgent as ServiceAgent
+from agent.secagg_plus.SA_ClientAgent import SA_ClientAgent as ClientAgent
+from agent.secagg_plus.SA_ServiceAgent import SA_ServiceAgent as ServiceAgent
 from model.LatencyModel import LatencyModel
-from util import util, param
+from util import util
 
 # Standard modules.
 from datetime import timedelta
@@ -50,8 +50,6 @@ parser.add_argument('-d', '--debug_mode', type=bool, default=False,
                     help='print debug info')
 parser.add_argument('--config_help', action='store_true',
                     help='Print argument options for this config file')
-parser.add_argument('--vector_len', type=int, default=1024,
-                    help='Length of the vector for each client')
 
 args, remaining_args = parser.parse_known_args()
 
@@ -93,7 +91,6 @@ round_time = args.round_time
 max_input = args.max_input
 num_iterations = args.num_iterations
 debug_mode = args.debug_mode
-vector_len = args.vector_len
 
 ### How many client agents will there be?   1000 in 125 subgraphs of 8 fits ln(n), for example
 # num_subgraphs = args.num_subgraphs
@@ -196,8 +193,7 @@ agents.extend([ ServiceAgent(
                 num_neighbors = num_neighbors,
                 neighbor_threshold = neighbor_threshold,
                 debug_mode = debug_mode,
-                max_input = max_input,
-                vector_len = vector_len,) ])
+                max_input = max_input,) ])
 
 
 
@@ -216,7 +212,8 @@ for i in range (a, b):
                 num_neighbors = num_neighbors,
                 threshold = neighbor_threshold,
                 max_input = max_input,
-                vector_len = vector_len,
+                # multiplier = accy_multiplier, X_train = X_train, y_train = y_train, X_test = X_test, y_test = y_test,
+                # split_size = split_size, secret_scale = secret_scale,
                 debug_mode = debug_mode,
                 random_state = np.random.RandomState(seed=np.random.randint(low=0,high=2**32,  dtype='uint64'))))
 
@@ -239,7 +236,7 @@ model_args = { 'connected'   : True,
                # All in NYC.
                # Only matters for evaluating "real world" protocol duration,
                # not for accuracy, collusion, or reconstruction.
-               'min_latency': np.random.uniform(low=1000000, high=10000000, size=pairwise),
+               'min_latency' : np.random.uniform(low = 21000, high = 53000000, size = pairwise),
                'jitter'      : 0.3,
                'jitter_clip' : 0.05,
                'jitter_unit' : 5,
@@ -287,3 +284,4 @@ print (f"    Report step:         {results['clt_collection'] / num_clients}")
 print (f"    Crosscheck step:     {results['clt_crosscheck'] / num_clients}")
 print (f"    Reconstruction step: {results['clt_reconstruction'] / num_clients}")
 print ()
+

@@ -6,12 +6,8 @@ import pandas as pd
 import math
 
 # System parameters
-vector_len = 10000
-
-
 vector_type = 'uint32'
 
-# committee_size = 8
 fraction = 1 / 3
 fixed_key = b"abcd"
 
@@ -29,6 +25,10 @@ wt_google_share = pd.Timedelta('30s')  # ensure all user_choice received message
 wt_google_collection = pd.Timedelta('10s')
 wt_google_crosscheck = pd.Timedelta('3s')
 wt_google_recontruction = pd.Timedelta('2s')
+
+wt_flamingo_report = pd.Timedelta('10s')
+wt_flamingo_crosscheck = pd.Timedelta('3s')
+wt_flamingo_reconstruction = pd.Timedelta('3s')
 
 
 root_seed = get_random_bytes(32)

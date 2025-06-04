@@ -11,7 +11,7 @@ import random
 import os
 
 from agent.Agent import Agent
-from agent.HPRF.hprf import load_initialization_values, HPRF
+from .HPRF.hprf import load_initialization_values, HPRF
 from message.Message import Message
 from util import param, util
 from util.crypto.secretsharing.vss import VSS
@@ -440,7 +440,7 @@ class SA_AggregatorAgent(Agent):
         self.selected_indices, self.b_old = self.MMF(self.user_masked_vectors, self.l2_old, self.linf_old,
                                                      self.linf_HPRF_old, self.b_old,
                                                      self.current_iteration)
-        initialization_values_filename = r"agent\\HPRF\\initialization_values"
+        initialization_values_filename = r"agent\\Aion\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
         self.hprf_prime = p
 
@@ -542,20 +542,18 @@ class SA_AggregatorAgent(Agent):
 
         
         # 2. Generate mask vector using recovered seed
-        initialization_values_filename = r"agent\\HPRF\\initialization_values"
+        initialization_values_filename = r"agent\\Aion\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
-        filename = r"agent\\HPRF\\matrix"
+        filename = r"agent\\Aion\\HPRF\\matrix"
         hprf = HPRF(n, m, p, q, filename)
         self.seed_sum_hprf = hprf.hprf(self.seed_sum, self.current_iteration, self.vector_len)
         self.final_sum = self.vec_sum_partial - self.seed_sum_hprf
         self.final_sum %= self.hprf_prime
         self.final_sum //= len(self.selected_indices)
         self.final_sum = np.array(self.final_sum, dtype=object)
-
         self.l2_old = [np.linalg.norm(self.final_sum)] + self.l2_old[:1]
         self.linf_old = np.max(np.abs(self.final_sum))
         self.linf_HPRF_old = np.max(np.abs(self.seed_sum_hprf))
-
         compute_time = time.time() - compute_start
         self.timings["Aggregate share reconstruction"].append(compute_time)
         

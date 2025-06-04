@@ -21,7 +21,7 @@ class HPRF:
         self.p = p
         self.q = q
         self.filename = filename
-        self.q_half = q // 2  # 预计算常量
+        self.q_half = q // 2  # Pre-computed constant
 
         if os.path.exists(filename):
             with open(filename, 'rb') as file:
@@ -35,19 +35,18 @@ class HPRF:
                 pickle.dump(self.A, file)
 
         
-        # 预计算列和
+        # Pre-compute column sums
         self.A_col_sums_np = np.sum(self.A_np, axis=0, dtype=object)
 
     def G_batch(self, s_scalars_batch_np):
-        """优化后的批处理计算"""
-        # 使用广播机制计算所有 (s * col_sum) % q
+        """Optimized batch computation"""
+        # Use broadcasting to compute all (s * col_sum) % q
         products = (s_scalars_batch_np[:, None] * self.A_col_sums_np) % self.q
         
-        # 向量化整数运算实现四舍五入
+        # Vectorized integer operations for rounding
         result_matrix = (products * self.p + self.q_half) // self.q
         return result_matrix.astype(object)
 
-    # 其余函数保持不变
     def G(self, s):
         s_np = np.array([s], dtype=np.int64)
         result_matrix = self.G_batch(s_np)

@@ -783,7 +783,7 @@ class SA_ServiceAgent(Agent):
                 else:
                     raise ValueError("self.id =", self.id, " should not appear in neighbors", self.neighbors)
    
-        self.vec_sum_partial len(self.online_set))
+        self.vec_sum_partial = self.vec_sum_partial / len(self.online_set)
         print("final sum =", self.vec_sum_partial)
 
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
