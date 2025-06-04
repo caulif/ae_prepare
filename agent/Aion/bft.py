@@ -31,7 +31,7 @@ class BFTProtocol:
     def __init__(self, node_id: int, total_nodes: int, f: int):
         self.node_id = node_id
         self.total_nodes = total_nodes
-        self.f = f  # 最大容错节点数
+        self.f = f  # Maximum number of faulty nodes
         self.messages: Dict[str, List[BFTMessage]] = {}
         self.votes: Dict[str, int] = {}
         self.phase = 0
@@ -42,31 +42,31 @@ class BFTProtocol:
         self.sequence = 0
         self.prepared_values: Dict[int, Set[Any]] = {}
         self.committed_values: Dict[int, Set[Any]] = {}
-        self.timeout = 5  # 超时时间（秒）
+        self.timeout = 5  # Timeout in seconds
         self.last_timeout = time.time()
         
-        # 加载节点的密钥对
+        # Load node key pair
         self._load_keys()
 
     def _load_keys(self):
-        """加载节点的密钥对"""
+        """Load node key pair"""
         try:
-            # 从文件加载私钥
+            # Load private key from file
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             if not os.path.exists(private_key_path):
                 self.logger.warning(f"Private key file not found: {private_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
             with open(private_key_path, 'rb') as f:
                 self.private_key = ECC.import_key(f.read())
                 
-            # 从文件加载公钥
+            # Load public key from file
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             if not os.path.exists(public_key_path):
                 self.logger.warning(f"Public key file not found: {public_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
@@ -75,27 +75,27 @@ class BFTProtocol:
                 
         except Exception as e:
             self.logger.error(f"Failed to load keys: {e}")
-            # 生成新的密钥对
+            # Generate new key pair
             self._generate_keys()
             
     def _generate_keys(self):
-        """生成新的ECC密钥对"""
+        """Generate new ECC key pair"""
         try:
-            # 生成256位的ECC密钥对
+            # Generate 256-bit ECC key pair
             key = ECC.generate(curve='P-256')
             self.private_key = key
             self.public_key = key.public_key()
             
-            # 确保pki_files目录存在
+            # Ensure pki_files directory exists
             if not os.path.exists('pki_files'):
                 os.makedirs('pki_files')
             
-            # 保存私钥
+            # Save private key
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             with open(private_key_path, 'wb') as f:
                 f.write(self.private_key.export_key(format='PEM'))
             
-            # 保存公钥
+            # Save public key
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             with open(public_key_path, 'wb') as f:
                 f.write(self.public_key.export_key(format='PEM'))
@@ -106,14 +106,14 @@ class BFTProtocol:
             raise
 
     def prepare(self, value: Any, sequence: Optional[int] = None) -> BFTMessage:
-        """准备阶段"""
+        """Prepare phase"""
         if sequence is None:
             sequence = self.sequence
         self.proposed_value = value
         self.phase = BFTPhase.PREPARE
         self.sequence = sequence
         
-        # 创建准备消息
+        # Create prepare message
         prepare_msg = BFTMessage(
             type='prepare',
             value=value,
@@ -124,19 +124,19 @@ class BFTProtocol:
             timestamp=time.time()
         )
         
-        # 签名消息
+        # Sign message
         prepare_msg.signature = self._sign_message(prepare_msg)
         return prepare_msg
 
     def precommit(self, prepare_msg: BFTMessage) -> Optional[BFTMessage]:
-        """预提交阶段"""
+        """Pre-commit phase"""
         if not self._verify_message(prepare_msg):
             return None
             
         if self._verify_prepare(prepare_msg):
             self.phase = BFTPhase.PRECOMMIT
             
-            # 创建预提交消息
+            # Create pre-commit message
             precommit_msg = BFTMessage(
                 type='precommit',
                 value=prepare_msg.value,
@@ -146,20 +146,20 @@ class BFTProtocol:
                 sequence=prepare_msg.sequence
             )
             
-            # 签名消息
+            # Sign message
             precommit_msg.signature = self._sign_message(precommit_msg)
             return precommit_msg
         return None
 
     def commit(self, precommit_msg: BFTMessage) -> Optional[BFTMessage]:
-        """提交阶段"""
+        """Commit phase"""
         if not self._verify_message(precommit_msg):
             return None
             
         if self._verify_precommit(precommit_msg):
             self.phase = BFTPhase.COMMIT
             
-            # 创建提交消息
+            # Create commit message
             commit_msg = BFTMessage(
                 type='commit',
                 value=precommit_msg.value,
@@ -169,13 +169,13 @@ class BFTProtocol:
                 sequence=precommit_msg.sequence
             )
             
-            # 签名消息
+            # Sign message
             commit_msg.signature = self._sign_message(commit_msg)
             return commit_msg
         return None
 
     def _verify_prepare(self, msg: BFTMessage) -> bool:
-        """验证准备消息"""
+        """Verify prepare message"""
         if msg.sequence not in self.prepared_values:
             self.prepared_values[msg.sequence] = set()
             
@@ -183,11 +183,11 @@ class BFTProtocol:
         prepare_messages = [m for m in self.messages.get('prepare', []) 
                           if m.sequence == msg.sequence]
         
-        # 检查是否收到足够的准备消息
+        # Check if enough prepare messages received
         if len(prepare_messages) < (self.total_nodes - self.f):
             return False
             
-        # 检查所有准备消息的值是否一致
+        # Check if all prepare messages have consistent values
         values = {m.value for m in prepare_messages}
         if len(values) > 1:
             self.logger.warning(f"Conflicting values in prepare messages: {values}")
@@ -196,7 +196,7 @@ class BFTProtocol:
         return True
 
     def _verify_precommit(self, msg: BFTMessage) -> bool:
-        """验证预提交消息"""
+        """Verify pre-commit message"""
         if msg.sequence not in self.committed_values:
             self.committed_values[msg.sequence] = set()
             
@@ -204,11 +204,11 @@ class BFTProtocol:
         precommit_messages = [m for m in self.messages.get('precommit', []) 
                             if m.sequence == msg.sequence]
         
-        # 检查是否收到足够的预提交消息
+        # Check if enough pre-commit messages received
         if len(precommit_messages) < (self.total_nodes - self.f):
             return False
             
-        # 检查所有预提交消息的值是否一致
+        # Check if all pre-commit messages have consistent values
         values = {m.value for m in precommit_messages}
         if len(values) > 1:
             self.logger.warning(f"Conflicting values in precommit messages: {values}")
@@ -217,18 +217,18 @@ class BFTProtocol:
         return True
 
     def handle_message(self, msg: BFTMessage) -> Optional[BFTMessage]:
-        """处理接收到的消息"""
-        # 验证消息
+        """Handle received message"""
+        # Verify message
         if not self._verify_message(msg):
             self.logger.warning(f"Invalid message received from node {msg.node_id}")
             return None
             
-        # 存储消息
+        # Store message
         if msg.type not in self.messages:
             self.messages[msg.type] = []
         self.messages[msg.type].append(msg)
 
-        # 根据消息类型处理
+        # Process based on message type
         if msg.type == 'prepare':
             return self.precommit(msg)
         elif msg.type == 'precommit':
@@ -241,33 +241,33 @@ class BFTProtocol:
         return None
 
     def _verify_message(self, msg: BFTMessage) -> bool:
-        """验证消息的有效性"""
-        # 检查视图号
+        """Verify message validity"""
+        # Check view number
         if msg.view < self.view:
             self.logger.warning(f"Message view {msg.view} is less than current view {self.view}")
             return False
             
-        # 检查序列号
+        # Check sequence number
         if msg.sequence < self.sequence:
             self.logger.warning(f"Message sequence {msg.sequence} is less than current sequence {self.sequence}")
             return False
             
-        # 检查签名
+        # Check signature
         if not msg.signature:
             self.logger.warning("Message has no signature")
             return False
             
-        # 验证签名
+        # Verify signature
         try:
-            # 使用ECC公钥验证签名
+            # Use ECC public key to verify signature
             return self._verify_signature(msg, self.public_key)
         except Exception as e:
             self.logger.error(f"Failed to verify message: {e}")
             return False
 
     def _sign_message(self, msg: BFTMessage) -> str:
-        """签名消息"""
-        # 序列化消息内容
+        """Sign message"""
+        # Serialize message content
         msg_data = {
             'type': msg.type,
             'value': msg.value,
@@ -279,19 +279,19 @@ class BFTProtocol:
         }
         serialized_data = dill.dumps(msg_data)
         
-        # 计算消息哈希
+        # Calculate message hash
         hash_obj = SHA256.new(serialized_data)
         
-        # 使用ECC私钥签名
+        # Use ECC private key to sign
         signer = DSS.new(self.private_key, 'fips-186-3')
         signature = signer.sign(hash_obj)
         
         return signature.hex()
 
     def _verify_signature(self, msg: BFTMessage, public_key: ECC.EccKey) -> bool:
-        """验证消息签名"""
+        """Verify message signature"""
         try:
-            # 序列化消息内容
+            # Serialize message content
             msg_data = {
                 'type': msg.type,
                 'value': msg.value,
@@ -303,10 +303,10 @@ class BFTProtocol:
             }
             serialized_data = dill.dumps(msg_data)
             
-            # 计算消息哈希
+            # Calculate message hash
             hash_obj = SHA256.new(serialized_data)
             
-            # 使用ECC公钥验证签名
+            # Use ECC public key to verify signature
             verifier = DSS.new(public_key, 'fips-186-3')
             verifier.verify(hash_obj, bytes.fromhex(msg.signature))
             return True
@@ -315,7 +315,7 @@ class BFTProtocol:
             return False
 
     def _check_consensus(self, sequence: int) -> bool:
-        """检查是否达成共识"""
+        """Check if consensus is reached"""
         if sequence not in self.committed_values:
             return False
             
@@ -327,15 +327,15 @@ class BFTProtocol:
         return len(values) >= (self.total_nodes - self.f)
 
     def check_timeout(self) -> bool:
-        """检查是否超时"""
+        """Check if timeout occurred"""
         return time.time() - self.last_timeout > self.timeout
 
     def reset_timeout(self):
-        """重置超时计时器"""
+        """Reset timeout timer"""
         self.last_timeout = time.time()
 
     def start_view_change(self):
-        """启动视图切换"""
+        """Start view change"""
         self.view += 1
         self.sequence = 0
         self.messages.clear()

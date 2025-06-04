@@ -38,9 +38,8 @@ class SA_AggregatorAgent(Agent):
                  num_clients=10,
                  parallel_mode=1,
                  debug_mode=0,
-                 Dimension=10_000,
-                 commit_size=8,
-                 msg_name=None,
+                 vector_len=10_000,
+                 aggregator_size=8,
                  users=None):
         """
         Initializes the server agent.
@@ -57,9 +56,8 @@ class SA_AggregatorAgent(Agent):
             num_clients (int): Number of users for each training round.
             parallel_mode (int): Parallel mode.
             debug_mode (int): Debug mode.
-            Dimension (int): Vector length.
-            commit_size (int): Committee size.
-            msg_name (str): Message name.
+            vector_len (int): Vector length.
+            aggregator_size (int): Aggregator size.
             users (set): Set of user IDs.
         """
         super().__init__(id, name, type, random_state)
@@ -79,12 +77,11 @@ class SA_AggregatorAgent(Agent):
         # Input parameters
         self.num_clients = num_clients
         self.users = users if users is not None else set()
-        self.vector_len = Dimension
+        self.vector_len = vector_len
         self.vector_dtype = param.vector_type
 
         # Security parameters
-        self.commit_size = commit_size
-        self.msg_name = msg_name
+        self.aggregator_size = aggregator_size
         self.committee_threshold = 0
         self.prime = param.prime
 
@@ -192,7 +189,6 @@ class SA_AggregatorAgent(Agent):
         self.starttime = time.time()
         self.setComputationDelay(0)
         self.kernel.custom_state['Legal clients confirmation'] = 0
-        # self.kernel.custom_state['Masked model generation'] = 0
         self.kernel.custom_state['Online clients confirmation'] = 0
         self.kernel.custom_state['Aggregate share reconstruction'] = 0
         self.kernel.custom_state['Model aggregation'] = 0
@@ -284,7 +280,7 @@ class SA_AggregatorAgent(Agent):
         dt_protocol_start = pd.Timestamp('now')
         
         # Select committee members
-        self.user_committee = param.choose_committee(param.root_seed, self.commit_size, self.num_clients)
+        self.user_committee = param.choose_committee(param.root_seed, self.aggregator_size, self.num_clients)
         # Use 1/3 of committee size as threshold
         self.committee_threshold = max(2, len(self.user_committee) // 3)
 
@@ -363,8 +359,7 @@ class SA_AggregatorAgent(Agent):
                     "bft_message": prepare_msg,
                     "sign_message": message
                 }),
-                tag="comm_dec_server",
-                msg_name=self.msg_name
+                tag="comm_dec_server"
             )
 
         # Wait for consensus
@@ -473,8 +468,7 @@ class SA_AggregatorAgent(Agent):
                                       "iteration": self.current_iteration,
                                       "request id list": self.selected_indices,
                                       }),
-                             tag="comm_sign_server",
-                             msg_name=self.msg_name)
+                             tag="comm_sign_server")
 
         self.current_round = 3
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
@@ -534,20 +528,20 @@ class SA_AggregatorAgent(Agent):
         self.recv_user_masked_vectors = {}
 
     def reconstruction_process(self):
-        """处理重构过程"""
+        """Process reconstruction phase"""
         self.agent_print("Number of collected shares:", len(self.committee_shares_sum))
         if len(self.committee_shares_sum) < self.committee_threshold:
             raise RuntimeError("Not enough decryption shares received.")
 
-        # 只统计本地计算时间
+        # Only count local computation time
         compute_start = time.time()
         
-        # 1. 从委员会成员发送的相加后的份额中恢复出种子和
+        # 1. Recover seed sum from committee members' combined shares
         committee_shares = list(self.committee_shares_sum.values())
         self.seed_sum = self.vss.reconstruct(committee_shares, self.prime)
 
         
-        # 2. 使用恢复出的种子生成掩码向量
+        # 2. Generate mask vector using recovered seed
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
         n, m, p, q = load_initialization_values(initialization_values_filename)
         filename = r"agent\\HPRF\\matrix"
@@ -555,9 +549,7 @@ class SA_AggregatorAgent(Agent):
         self.seed_sum_hprf = hprf.hprf(self.seed_sum, self.current_iteration, self.vector_len)
         self.final_sum = self.vec_sum_partial - self.seed_sum_hprf
         self.final_sum %= self.hprf_prime
-        # print("final_sum", self.final_sum)
         self.final_sum //= len(self.selected_indices)
-        # print("final_sum", self.final_sum)
         self.final_sum = np.array(self.final_sum, dtype=object)
 
         self.l2_old = [np.linalg.norm(self.final_sum)] + self.l2_old[:1]
@@ -568,14 +560,14 @@ class SA_AggregatorAgent(Agent):
         self.timings["Aggregate share reconstruction"].append(compute_time)
         
         start_time = time.time()
-        # 创建全局模型消息
+        # Create global model message
         message_final_sum = Message({
             "msg": "FINAL_SUM",
             "iteration": self.current_iteration,
             "final_sum": self.final_sum
         })
 
-        # 使用BFT就全局模型达成共识
+        # Use BFT to reach consensus on global model
         _, consensus_time = self._bft_broadcast_with_consensus(message_final_sum, self.user_committee)
         self.timings["Model aggregation"].append(time.time()-start_time)
 
@@ -583,10 +575,8 @@ class SA_AggregatorAgent(Agent):
         """Sends the final result to clients."""
         for id in self.users:
             self.sendMessage(id,
-                            #  Message({"msg": "REQ", "sender": 0, "output": self.final_sum}),
                              Message({"msg": "REQ", "sender": 0, "output": 1}),
-                             tag="comm_output_server",
-                             msg_name=self.msg_name)
+                             tag="comm_output_server")
 
     def MMF(self, masked_updates, l2_old, linf_old, linf_HPRF_old, b_old, current_round):
         """
@@ -723,8 +713,7 @@ class SA_AggregatorAgent(Agent):
                                    "sender": self.id,
                                    "sum_shares": combined_share,  # 直接发送完整的份额元组
                                    }),
-                          tag="comm_secret_sharing",
-                          msg_name=self.msg_name)
+                          tag="comm_secret_sharing")
             
             self.agent_print(f"Committee member {self.id} sent combined share to server")
             
@@ -792,8 +781,7 @@ class SA_AggregatorAgent(Agent):
                                       "iteration": self.current_iteration,
                                       "request id list": self.selected_indices,
                                       }),
-                             tag="comm_sign_server",
-                             msg_name=self.msg_name)
+                             tag="comm_sign_server")
 
         self.current_round = 3
         server_comp_delay = pd.Timestamp('now') - dt_protocol_start
@@ -804,67 +792,67 @@ class SA_AggregatorAgent(Agent):
         self.check_time = time.time() - self.check_time
 
     def _check_consensus(self):
-        """检查是否达成共识"""
+        """Check if consensus is reached"""
         if len(self.bft_responses) < (self.num_clients - self.bft_protocol.f):
             return False
             
-        # 检查所有响应是否一致
+        # Check if all responses are consistent
         values = [msg.value for msg in self.bft_responses.values()]
         return all(v == values[0] for v in values)
 
     def _handle_consensus(self):
-        """处理达成的共识"""
+        """Handle consensus result"""
         if self._check_consensus():
-            # 获取共识值
+            # Get consensus value
             consensus_value = next(iter(self.bft_responses.values())).value
             self.bft_consensus[self.current_iteration] = consensus_value
             
-            # 执行共识后的操作
+            # Execute post-consensus actions
             self._execute_consensus_action(consensus_value)
 
     def _execute_consensus_action(self, value):
-        """执行共识后的操作"""
-        # 根据具体需求实现
+        """Execute post-consensus actions"""
+        # Implement based on specific requirements
         pass
 
     def handle_view_change(self, currentTime, msg):
-        """处理视图切换消息"""
+        """Handle view change message"""
         if msg.body['msg'] == "VIEW_CHANGE":
             view_change_msg = msg.body['view_change_message']
             if self.view_protocol.handle_view_change(view_change_msg):
-                # 视图切换达成共识
+                # View change consensus reached
                 self._complete_view_change(view_change_msg)
                 
     def _complete_view_change(self, view_change_msg):
-        """完成视图切换"""
-        # 更新视图
+        """Complete view change"""
+        # Update view
         self.view_protocol.current_view = view_change_msg.view
         
-        # 恢复状态
+        # Restore state
         self._restore_state_from_checkpoint(view_change_msg.last_checkpoint)
         
-        # 重新广播未完成的消息
+        # Re-broadcast unfinished messages
         self._rebroadcast_prepared_messages(view_change_msg.prepared_messages)
         
     def _restore_state_from_checkpoint(self, checkpoint_number):
-        """从检查点恢复状态"""
+        """Restore state from checkpoint"""
         if checkpoint_number in self.checkpoint_protocol.stable_checkpoints:
             checkpoint = self.checkpoint_protocol.stable_checkpoints[checkpoint_number]
-            # 恢复状态
+            # Restore state
             self._apply_checkpoint_state(checkpoint['state'])
             
     def _apply_checkpoint_state(self, state):
-        """应用检查点状态"""
-        # 实现状态恢复逻辑
+        """Apply checkpoint state"""
+        # Implement state restoration logic
         pass
         
     def _rebroadcast_prepared_messages(self, prepared_messages):
-        """重新广播已准备的消息"""
+        """Re-broadcast prepared messages"""
         for msg in prepared_messages:
             self._bft_broadcast_with_consensus(msg, self.client_id_list)
             
     def create_checkpoint(self):
-        """创建检查点"""
+        """Create checkpoint"""
         state = {
             'current_iteration': self.current_iteration,
             'bft_messages': self.bft_messages,
@@ -874,32 +862,32 @@ class SA_AggregatorAgent(Agent):
         return self.checkpoint_protocol.create_checkpoint(state)
         
     def verify_checkpoint(self, checkpoint):
-        """验证检查点"""
+        """Verify checkpoint"""
         return self.checkpoint_protocol.verify_checkpoint(checkpoint)
         
     def stabilize_checkpoint(self, checkpoint_number):
-        """稳定检查点"""
+        """Stabilize checkpoint"""
         self.checkpoint_protocol.stabilize_checkpoint(checkpoint_number)
 
     def _load_keys(self):
-        """加载节点的密钥对"""
+        """Load node keys"""
         try:
-            # 从文件加载私钥
+            # Load private key
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             if not os.path.exists(private_key_path):
                 self.logger.warning(f"Private key file not found: {private_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
             with open(private_key_path, 'rb') as f:
                 self.private_key = ECC.import_key(f.read())
                 
-            # 从文件加载公钥
+            # Load public key
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             if not os.path.exists(public_key_path):
                 self.logger.warning(f"Public key file not found: {public_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
@@ -908,27 +896,27 @@ class SA_AggregatorAgent(Agent):
                 
         except Exception as e:
             self.logger.error(f"Failed to load keys: {e}")
-            # 生成新的密钥对
+            # Generate new key pair
             self._generate_keys()
             
     def _generate_keys(self):
-        """生成新的ECC密钥对"""
+        """Generate new ECC key pair"""
         try:
-            # 生成256位的ECC密钥对
+            # Generate 256-bit ECC key pair
             key = ECC.generate(curve='P-256')
             self.private_key = key
             self.public_key = key.public_key()
             
-            # 确保pki_files目录存在
+            # Ensure pki_files directory exists
             if not os.path.exists('pki_files'):
                 os.makedirs('pki_files')
             
-            # 保存私钥
+            # Save private key
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             with open(private_key_path, 'wb') as f:
                 f.write(self.private_key.export_key(format='PEM'))
             
-            # 保存公钥
+            # Save public key
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             with open(public_key_path, 'wb') as f:
                 f.write(self.public_key.export_key(format='PEM'))
@@ -939,8 +927,8 @@ class SA_AggregatorAgent(Agent):
             raise
 
     def _sign_message(self, msg: BFTMessage) -> str:
-        """签名消息"""
-        # 序列化消息内容
+        """Sign message"""
+        # Serialize message content
         msg_data = {
             'type': msg.type,
             'value': msg.value,
@@ -952,19 +940,19 @@ class SA_AggregatorAgent(Agent):
         }
         serialized_data = dill.dumps(msg_data)
         
-        # 计算消息哈希
+        # Calculate message hash
         hash_obj = SHA256.new(serialized_data)
         
-        # 使用ECC私钥签名
+        # Use ECC private key to sign
         signer = DSS.new(self.private_key, 'fips-186-3')
         signature = signer.sign(hash_obj)
         
         return signature.hex()
 
     def _verify_signature(self, msg: BFTMessage, public_key: ECC.EccKey) -> bool:
-        """验证消息签名"""
+        """Verify message signature"""
         try:
-            # 序列化消息内容
+            # Serialize message content
             msg_data = {
                 'type': msg.type,
                 'value': msg.value,
@@ -976,10 +964,10 @@ class SA_AggregatorAgent(Agent):
             }
             serialized_data = dill.dumps(msg_data)
             
-            # 计算消息哈希
+            # Calculate message hash
             hash_obj = SHA256.new(serialized_data)
             
-            # 使用ECC公钥验证签名
+            # Use ECC public key to verify signature
             verifier = DSS.new(public_key, 'fips-186-3')
             verifier.verify(hash_obj, bytes.fromhex(msg.signature))
             return True

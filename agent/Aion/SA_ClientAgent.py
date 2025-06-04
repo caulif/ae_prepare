@@ -33,9 +33,8 @@ class SA_ClientAgent(Agent):
                  num_clients=128,
                  neighborhood_size=1,
                  debug_mode=0,
-                 Dimension=10000,
-                 commit_size=8,
-                 msg_name=None,
+                 vector_len=10000,
+                 aggregator_size=8,
                  random_state=None):
         """
         Initializes the client agent.
@@ -54,8 +53,7 @@ class SA_ClientAgent(Agent):
 
         super().__init__(id, name, type, random_state)
 
-        self.commit_size = commit_size
-        self.msg_name = msg_name
+        self.aggregator_size = aggregator_size
         self.report_time = None
         self.reco_time = None
         self.check_time = None
@@ -70,13 +68,13 @@ class SA_ClientAgent(Agent):
 
         self.num_clients = num_clients
         self.neighborhood_size = neighborhood_size
-        self.vector_len = Dimension
+        self.vector_len = vector_len
         self.vector_dtype = param.vector_type
 
         self.key_length = key_length
 
         self.user_committee = param.choose_committee(param.root_seed,
-                                                     self.commit_size,
+                                                     self.aggregator_size,
                                                      self.num_clients)
 
         self.committee_shared_sk = None
@@ -104,15 +102,15 @@ class SA_ClientAgent(Agent):
         self.receive_mask_shares = {}
         self.mask_commitments = {}
         self.flag = 0
-        # 初始化BFT协议
+        # Initialize BFT protocol
         self.bft_protocol = BFTProtocol(
             node_id=self.id,
             total_nodes=self.num_clients,
-            f=self.num_clients // 3  # 假设最多容忍1/3的拜占庭节点
+            f=self.num_clients // 3  # Assume at most 1/3 Byzantine nodes
         )
         self.shared_mask_count = 0
 
-        # 统计各阶段时间
+        # Record time for each phase
         self.timings = {
             "Seed sharing": [],
             "REPORT": [],
@@ -212,7 +210,7 @@ class SA_ClientAgent(Agent):
                 "sign_message": sign_message
             }),
             tag="comm_sign_client",
-            msg_name=self.msg_name
+           
         )
 
     def receiveMessage(self, currentTime, msg):
@@ -237,7 +235,7 @@ class SA_ClientAgent(Agent):
                                           "sum_shares": sum_shares,
                                           }),
                                  tag="comm_secret_sharing",
-                                 msg_name=self.msg_name)
+                                )
 
                 self.recordTime(dt_protocol_start, 'RECONSTRUCTION')
                 self.reco_time = time.time() - self.reco_time
@@ -253,27 +251,27 @@ class SA_ClientAgent(Agent):
             self.recordTime(dt_protocol_start, "REPORT")
 
         elif msg.body["msg"] in ["BFT_SIGN_ONLINE", "BFT_SIGN_FINAL", "BFT_SIGN_LEGAL"]:
-            # 处理BFT消息
+            # Process BFT message
             bft_msg = msg.body['bft_message']
             
-            # 验证消息
+            # Verify message
             if not self._verify_bft_message(bft_msg):
                 return
             
-            # 处理消息并可能产生响应
+            # Process message and generate response
             response = self.bft_protocol.handle_message(bft_msg)
             if response:
-                # 签名响应
+                # Sign response
                 response.signature = self._sign_bft_message(response)
                 
-                # 根据消息类型确定响应类型
+                # Determine response type based on message type
                 response_type = "BFT_RESPONSE_LEGAL"
                 if msg.body["msg"] == "BFT_SIGN_ONLINE":
                     response_type = "BFT_RESPONSE_ONLINE"
                 elif msg.body["msg"] == "BFT_SIGN_FINAL":
                     response_type = "BFT_RESPONSE_FINAL"
                 
-                # 发送响应
+                # Send response
                 self.sendMessage(
                     self.AggregatorAgentID,
                     Message({
@@ -283,7 +281,7 @@ class SA_ClientAgent(Agent):
                         "bft_message": response
                     }),
                     tag="comm_sign_client",
-                    msg_name=self.msg_name
+                   
                 )
 
         elif msg.body["msg"] == "SHARED_MASK":
@@ -291,22 +289,17 @@ class SA_ClientAgent(Agent):
             sender_id = msg.body['sender']
             temp_shared_mask = msg.body['shared_mask']
             commitments = msg.body['commitments']
-            
-            # 存储份额和承诺
             self.receive_mask_shares[sender_id] = temp_shared_mask
             self.mask_commitments[sender_id] = commitments
             
-            # 检查是否收集到所有份额
             if len(self.receive_mask_shares) == self.num_clients:
-                # 使用同态性质验证所有份额
                 shares = list(self.receive_mask_shares.values())
                 all_commitments = list(self.mask_commitments.values())
-                # 使用批量验证方法
                 is_valid = self.vss.verify_shares_batch(shares, all_commitments[0], self.prime)
                 if is_valid:
                     pass
                 else:
-                    raise Exception("份额验证失败")
+                    raise Exception("Share verification failed")
                 self.timings["Seed sharing"][0] += (time.time() - vss_start_time)
 
 
@@ -321,7 +314,7 @@ class SA_ClientAgent(Agent):
             self.mask_seed = random.SystemRandom().randint(1, 100000)
             self.share_mask_seed()
 
-        # 只统计本地计算时间
+        # Only count local computation time
         compute_start = time.time()
         
         initialization_values_filename = r"agent\\HPRF\\initialization_values"
@@ -344,7 +337,7 @@ class SA_ClientAgent(Agent):
                                   "masked_vector": masked_vec,
                                   }),
                          tag="comm_key_generation",
-                         msg_name=self.msg_name)
+                        )
 
     def share_mask_seed(self):
         """
@@ -378,9 +371,9 @@ class SA_ClientAgent(Agent):
                                                 "commitments": commitments,
                                                 }),
                                         tag="comm_secret_sharing",
-                                        msg_name=self.msg_name)
+                                       )
                     
-        # self.agent_print(f"客户端{self.id}发送份额给委员会成员{user_committee_list[j]}: {share}")
+
         
 
     def generate_shares(secret, num_shares, threshold, prime, seed=None):
@@ -420,7 +413,7 @@ class SA_ClientAgent(Agent):
             commitments: A list of commitments for verification.
         """
         if threshold is None:
-            threshold = max(2, num_shares // 3)  # 确保阈值至少为2
+            threshold = max(2, num_shares // 3)  
         if prime is None:
             prime = self.prime
             
@@ -527,15 +520,14 @@ class SA_ClientAgent(Agent):
         print(*args, **kwargs)
 
     def _verify_bft_message(self, msg: BFTMessage) -> bool:
-        """验证BFT消息"""
-        # 验证消息签名
+        """Verify BFT message"""
         try:
             return self._verify_signature(msg)
         except:
             return False
 
     def _sign_bft_message(self, msg: BFTMessage) -> str:
-        """签名BFT消息"""
+        """Sign BFT message"""
         msg_to_sign = dill.dumps({
             'type': msg.type,
             'value': msg.value,
@@ -549,7 +541,7 @@ class SA_ClientAgent(Agent):
         return signer.sign(hash_container)
 
     def _verify_signature(self, msg: BFTMessage) -> bool:
-        """验证消息签名"""
+        """Verify message signature"""
         msg_to_verify = dill.dumps({
             'type': msg.type,
             'value': msg.value,
@@ -567,15 +559,15 @@ class SA_ClientAgent(Agent):
             return False
 
     def _handle_consensus(self, value):
-        """处理达成的共识"""
+        """Handle consensus result"""
         if isinstance(value, dict) and 'msg' in value:
             if value['msg'] == "VALID_CLIENTS":
-                # 处理有效客户端集合共识
+                # Handle valid clients set consensus
                 self.valid_clients = value['valid_clients']
             elif value['msg'] == "ONLINE_CLIENTS":
-                # 处理在线客户端集合共识
+                # Handle online clients set consensus
                 self.online_clients = value['online_clients']
             elif value['msg'] == "FINAL_SUM":
-                # 处理全局模型共识
+                # Handle global model consensus
                 self.final_sum = value['final_sum']
                 self.current_iteration += 1

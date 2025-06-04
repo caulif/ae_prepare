@@ -22,34 +22,34 @@ class ViewChangeProtocol:
         self.node_id = node_id
         self.total_nodes = total_nodes
         self.current_view = 0
-        self.view_change_timeout = 5  # 秒
+        self.view_change_timeout = 5  # seconds
         self.view_change_timer = None
         self.new_view_proposals: Dict[int, ViewChangeMessage] = {}
         self.last_checkpoint = 0
         self.logger = logging.getLogger(__name__)
         
-        # 加载节点的密钥对
+        # Load node key pair
         self._load_keys()
         
     def _load_keys(self):
-        """加载节点的密钥对"""
+        """Load node key pair"""
         try:
-            # 从文件加载私钥
+            # Load private key from file
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             if not os.path.exists(private_key_path):
                 self.logger.warning(f"Private key file not found: {private_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
             with open(private_key_path, 'rb') as f:
                 self.private_key = ECC.import_key(f.read())
                 
-            # 从文件加载公钥
+            # Load public key from file
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             if not os.path.exists(public_key_path):
                 self.logger.warning(f"Public key file not found: {public_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
@@ -58,27 +58,27 @@ class ViewChangeProtocol:
                 
         except Exception as e:
             self.logger.error(f"Failed to load keys: {e}")
-            # 生成新的密钥对
+            # Generate new key pair
             self._generate_keys()
             
     def _generate_keys(self):
-        """生成新的ECC密钥对"""
+        """Generate new ECC key pair"""
         try:
-            # 生成256位的ECC密钥对
+            # Generate 256-bit ECC key pair
             key = ECC.generate(curve='P-256')
             self.private_key = key
             self.public_key = key.public_key()
             
-            # 确保pki_files目录存在
+            # Ensure pki_files directory exists
             if not os.path.exists('pki_files'):
                 os.makedirs('pki_files')
             
-            # 保存私钥
+            # Save private key
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             with open(private_key_path, 'wb') as f:
                 f.write(self.private_key.export_key(format='PEM'))
             
-            # 保存公钥
+            # Save public key
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             with open(public_key_path, 'wb') as f:
                 f.write(self.public_key.export_key(format='PEM'))
@@ -89,7 +89,7 @@ class ViewChangeProtocol:
             raise
         
     def start_view_change(self):
-        """启动视图切换"""
+        """Start view change"""
         self.current_view += 1
         self.logger.info(f"Starting view change to view {self.current_view}")
         view_change_msg = self._broadcast_view_change()
@@ -97,7 +97,7 @@ class ViewChangeProtocol:
         return view_change_msg
         
     def _broadcast_view_change(self) -> ViewChangeMessage:
-        """广播视图切换请求"""
+        """Broadcast view change request"""
         view_change_msg = ViewChangeMessage(
             view=self.current_view,
             node_id=self.node_id,
@@ -106,13 +106,13 @@ class ViewChangeProtocol:
             timestamp=time.time()
         )
         
-        # 签名消息
+        # Sign message
         view_change_msg.signature = self._sign_message(view_change_msg)
         return view_change_msg
         
     def _sign_message(self, msg: ViewChangeMessage) -> str:
-        """签名消息"""
-        # 序列化消息内容
+        """Sign message"""
+        # Serialize message content
         msg_data = {
             'view': msg.view,
             'node_id': msg.node_id,
@@ -122,19 +122,19 @@ class ViewChangeProtocol:
         }
         serialized_data = dill.dumps(msg_data)
         
-        # 计算消息哈希
+        # Calculate message hash
         hash_obj = SHA256.new(serialized_data)
         
-        # 使用ECC私钥签名
+        # Use ECC private key to sign
         signer = DSS.new(self.private_key, 'fips-186-3')
         signature = signer.sign(hash_obj)
         
         return signature.hex()
         
     def _verify_signature(self, msg: ViewChangeMessage, public_key: ECC.EccKey) -> bool:
-        """验证消息签名"""
+        """Verify message signature"""
         try:
-            # 序列化消息内容
+            # Serialize message content
             msg_data = {
                 'view': msg.view,
                 'node_id': msg.node_id,
@@ -144,10 +144,10 @@ class ViewChangeProtocol:
             }
             serialized_data = dill.dumps(msg_data)
             
-            # 计算消息哈希
+            # Calculate message hash
             hash_obj = SHA256.new(serialized_data)
             
-            # 使用ECC公钥验证签名
+            # Use ECC public key to verify signature
             verifier = DSS.new(public_key, 'fips-186-3')
             verifier.verify(hash_obj, bytes.fromhex(msg.signature))
             return True
@@ -156,8 +156,8 @@ class ViewChangeProtocol:
             return False
         
     def handle_view_change(self, msg: ViewChangeMessage) -> bool:
-        """处理视图切换消息"""
-        # 验证消息签名
+        """Handle view change message"""
+        # Verify message signature
         try:
             with open(f'pki_files/node{msg.node_id}_public.pem', 'rb') as f:
                 sender_public_key = ECC.import_key(f.read())
@@ -172,23 +172,23 @@ class ViewChangeProtocol:
             self.new_view_proposals[msg.node_id] = msg
             self.logger.info(f"Received view change proposal for view {msg.view} from node {msg.node_id}")
             
-            # 检查是否收到足够的视图切换提议
+            # Check if enough view change proposals received
             if len(self.new_view_proposals) >= (self.total_nodes // 2 + 1):
                 self.logger.info(f"Received enough view change proposals for view {msg.view}")
                 return True
         return False
         
     def _get_prepared_messages(self) -> List[dict]:
-        """获取已准备的消息"""
-        # 实现获取已准备消息的逻辑
+        """Get prepared messages"""
+        # Implement logic to get prepared messages
         return []
         
     def _start_view_change_timer(self):
-        """启动视图切换定时器"""
+        """Start view change timer"""
         self.view_change_timer = time.time()
         
     def check_view_change_timeout(self) -> bool:
-        """检查视图切换是否超时"""
+        """Check if view change timeout occurred"""
         if self.view_change_timer is None:
             return False
         return time.time() - self.view_change_timer > self.view_change_timeout
@@ -196,34 +196,34 @@ class ViewChangeProtocol:
 class CheckpointProtocol:
     def __init__(self, node_id: int):
         self.node_id = node_id
-        self.checkpoint_interval = 100  # 检查点间隔
+        self.checkpoint_interval = 100  # Checkpoint interval
         self.last_checkpoint = 0
         self.checkpoint_state: Dict[int, dict] = {}
         self.stable_checkpoints: Dict[int, dict] = {}
         self.logger = logging.getLogger(__name__)
         
-        # 加载节点的密钥对
+        # Load node key pair
         self._load_keys()
         
     def _load_keys(self):
-        """加载节点的密钥对"""
+        """Load node key pair"""
         try:
-            # 从文件加载私钥
+            # Load private key from file
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             if not os.path.exists(private_key_path):
                 self.logger.warning(f"Private key file not found: {private_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
             with open(private_key_path, 'rb') as f:
                 self.private_key = ECC.import_key(f.read())
                 
-            # 从文件加载公钥
+            # Load public key from file
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             if not os.path.exists(public_key_path):
                 self.logger.warning(f"Public key file not found: {public_key_path}")
-                # 生成新的密钥对
+                # Generate new key pair
                 self._generate_keys()
                 return
                 
@@ -232,27 +232,27 @@ class CheckpointProtocol:
                 
         except Exception as e:
             self.logger.error(f"Failed to load keys: {e}")
-            # 生成新的密钥对
+            # Generate new key pair
             self._generate_keys()
             
     def _generate_keys(self):
-        """生成新的ECC密钥对"""
+        """Generate new ECC key pair"""
         try:
-            # 生成256位的ECC密钥对
+            # Generate 256-bit ECC key pair
             key = ECC.generate(curve='P-256')
             self.private_key = key
             self.public_key = key.public_key()
             
-            # 确保pki_files目录存在
+            # Ensure pki_files directory exists
             if not os.path.exists('pki_files'):
                 os.makedirs('pki_files')
             
-            # 保存私钥
+            # Save private key
             private_key_path = os.path.join('pki_files', f'node{self.node_id}.pem')
             with open(private_key_path, 'wb') as f:
                 f.write(self.private_key.export_key(format='PEM'))
             
-            # 保存公钥
+            # Save public key
             public_key_path = os.path.join('pki_files', f'node{self.node_id}_public.pem')
             with open(public_key_path, 'wb') as f:
                 f.write(self.public_key.export_key(format='PEM'))
@@ -263,7 +263,7 @@ class CheckpointProtocol:
             raise
         
     def create_checkpoint(self, state: dict) -> dict:
-        """创建检查点"""
+        """Create checkpoint"""
         checkpoint_number = self.last_checkpoint + self.checkpoint_interval
         checkpoint = {
             'number': checkpoint_number,
@@ -273,7 +273,7 @@ class CheckpointProtocol:
             'node_id': self.node_id
         }
         
-        # 签名检查点
+        # Sign checkpoint
         checkpoint['signature'] = self._sign_checkpoint(checkpoint)
         
         self.checkpoint_state[checkpoint_number] = checkpoint
@@ -282,8 +282,8 @@ class CheckpointProtocol:
         return checkpoint
         
     def _sign_checkpoint(self, checkpoint: dict) -> str:
-        """签名检查点"""
-        # 序列化检查点内容
+        """Sign checkpoint"""
+        # Serialize checkpoint content
         checkpoint_data = {
             'number': checkpoint['number'],
             'state': checkpoint['state'],
@@ -293,33 +293,33 @@ class CheckpointProtocol:
         }
         serialized_data = dill.dumps(checkpoint_data)
         
-        # 计算哈希
+        # Calculate hash
         hash_obj = SHA256.new(serialized_data)
         
-        # 使用ECC私钥签名
+        # Use ECC private key to sign
         signer = DSS.new(self.private_key, 'fips-186-3')
         signature = signer.sign(hash_obj)
         
         return signature.hex()
         
     def verify_checkpoint(self, checkpoint: dict) -> bool:
-        """验证检查点"""
-        # 验证检查点号
+        """Verify checkpoint"""
+        # Verify checkpoint number
         if checkpoint['number'] % self.checkpoint_interval != 0:
             self.logger.warning(f"Invalid checkpoint number: {checkpoint['number']}")
             return False
             
-        # 验证摘要
+        # Verify digest
         if checkpoint['digest'] != self._calculate_digest(checkpoint['state']):
             self.logger.warning("Invalid checkpoint digest")
             return False
             
-        # 验证签名
+        # Verify signature
         try:
             with open(f'pki_files/node{checkpoint["node_id"]}_public.pem', 'rb') as f:
                 sender_public_key = ECC.import_key(f.read())
                 
-            # 序列化检查点内容
+            # Serialize checkpoint content
             checkpoint_data = {
                 'number': checkpoint['number'],
                 'state': checkpoint['state'],
@@ -329,10 +329,10 @@ class CheckpointProtocol:
             }
             serialized_data = dill.dumps(checkpoint_data)
             
-            # 计算哈希
+            # Calculate hash
             hash_obj = SHA256.new(serialized_data)
             
-            # 使用ECC公钥验证签名
+            # Use ECC public key to verify signature
             verifier = DSS.new(sender_public_key, 'fips-186-3')
             verifier.verify(hash_obj, bytes.fromhex(checkpoint['signature']))
             return True
@@ -341,22 +341,22 @@ class CheckpointProtocol:
             return False
         
     def stabilize_checkpoint(self, checkpoint_number: int):
-        """稳定检查点"""
+        """Stabilize checkpoint"""
         if checkpoint_number in self.checkpoint_state:
             self.stable_checkpoints[checkpoint_number] = self.checkpoint_state[checkpoint_number]
             self._cleanup_old_checkpoints(checkpoint_number)
             self.logger.info(f"Stabilized checkpoint {checkpoint_number}")
             
     def _calculate_digest(self, state: dict) -> str:
-        """计算状态的摘要"""
-        # 序列化状态
+        """Calculate state digest"""
+        # Serialize state
         serialized_state = dill.dumps(state)
-        # 计算哈希
+        # Calculate hash
         return SHA256.new(serialized_state).hexdigest()
         
     def _cleanup_old_checkpoints(self, current_checkpoint: int):
-        """清理旧的检查点"""
-        # 保留最近的几个检查点，删除其他的
+        """Clean up old checkpoints"""
+        # Keep recent checkpoints, delete others
         to_keep = 3
         checkpoints_to_delete = sorted(self.stable_checkpoints.keys())[:-to_keep]
         for checkpoint in checkpoints_to_delete:

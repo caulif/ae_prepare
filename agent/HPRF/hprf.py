@@ -68,21 +68,6 @@ class HPRF:
         return all_output_values_np[:length].tolist()
 
 
-    def list_hprf(self, k, x, length):
-        result = []
-        counter = 0
-        offset = k[0][0]
-        initial_value = k[0][1]
-
-        while len(result) < length:
-            s = (initial_value * (x + counter)) % self.q
-            generated_values = self.G(s)
-            for val in generated_values:
-                result.append((offset, val))
-
-            counter += 1
-        return result[:length]
-
     def hprg(self, seed, length):
         """
          Generates a pseudo-random sequence of a specified length.
@@ -102,31 +87,6 @@ class HPRF:
         else:
             return extended_vector[:length]
 
-    def list_hprg(self, seed, length):
-        """
-        Generates a pseudo-random sequence of a specified length.
-
-        Args:
-            seed (int): The seed value.
-            length (int): The length of the sequence.
-
-        Returns:
-            list: The pseudo-random sequence.
-        """
-        result = []
-        offset = seed[0][0]
-        initial_value = seed[0][1]
-        extended_vector = self.G(initial_value)
-        if length > self.m:
-            repeated_vector = (extended_vector * (length // self.m + 1))[:length]
-            for i in range(len(repeated_vector)):
-                result.append((offset, repeated_vector[i]))
-            return result
-        else:
-            for i in range(len(extended_vector)):
-                result.append((offset, extended_vector[i]))
-            return result[:length]
-
 
 def load_initialization_values(filename):
     """
@@ -141,46 +101,3 @@ def load_initialization_values(filename):
     with open(filename, 'rb') as file:
         return pickle.load(file)
     
-
-if __name__ == "__main__":
-    initialization_values_filename = r"agent\HPRF\initialization_values"
-    n, m, p, q = load_initialization_values(initialization_values_filename)
-    filename = r"agent\HPRF\matrix"
-    hprf = HPRF(n, m, p, q, filename)
-    
-    # 测试参数
-    vector_len = 10000  # 向量长度
-    value = 10       # 每个向量的值
-    num_vectors = 1  # 向量数量
-    resut = hprf.hprf(10,1,10000)
-
-
-
-    # print("【测试1：先hprf再相加】")
-    # # 对每个值进行hprf
-    # hprf_results = []
-    # for i in range(num_vectors):
-    #     result = hprf.hprf(10, 1, vector_len)
-    #     print(result[0])
-    #     hprf_results.append(result)
-    #     # print(result)
-    #     # print(result)    
-    #     print(len(result))
-
-    
-    # 将结果相加
-    # sum_after_hprf = [0] * vector_len
-    # for result in hprf_results:
-    #     for i in range(vector_len):
-    #         sum_after_hprf[i] = (sum_after_hprf[i] + result[i]) % p
-
-    
-    # print(f"先hprf再相加的结果（前5个值）: {sum_after_hprf[:5]}")
-    
-    # print("\n【测试2：先相加再hprf】")
-    # # 先计算总和
-    # total_sum = (value * num_vectors) % q
-    # # 对总和进行hprf
-    # hprf_after_sum = hprf.hprf(total_sum, 1, vector_len)
-    
-    # print(f"先相加再hprf的结果（前5个值）: {hprf_after_sum[:5]}")

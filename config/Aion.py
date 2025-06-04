@@ -22,8 +22,6 @@ from time import time
 import argparse
 
 parser = argparse.ArgumentParser(description='Detailed options for PPFL config.')
-parser.add_argument('-a', '--clear_learning', action='store_true',
-                    help='Learning in the clear (vs SMP protocol)')
 parser.add_argument('-c', '--config', required=True,
                     help='Name of config file to execute')
 parser.add_argument('-i', '--num_iterations', type=int, default=5,
@@ -34,8 +32,6 @@ parser.add_argument('-l', '--log_dir', default=None,
                     help='Log directory name (default: unix timestamp at program start)')
 parser.add_argument('-n', '--num_clients', type=int, default=5,
                     help='Number of clients for the secure multiparty protocol)')
-parser.add_argument('-o', '--neighborhood_size', type=int, default=1,
-                    help='Number of neighbors a client has (should only enter the multiplication factor of log(n))')
 parser.add_argument('--round_time', type=int, default=10,
                     help='Fixed time the server waits for one round')
 parser.add_argument('-s', '--seed', type=int, default=None,
@@ -46,17 +42,11 @@ parser.add_argument('-p', '--parallel_mode', type=bool, default=True,
                     help='turn on parallel mode at server side')
 parser.add_argument('-d', '--debug_mode', type=bool, default=False,
                     help='print debug info')
-parser.add_argument('-D' , '--Dimension', type=int, default=1000, help='Dimension of the data')
-parser.add_argument('-SN', '--commit_size', type=int, default=16, help='Size of the committee')
-parser.add_argument('-M', '--msg_name', type=str, default=None, help='Name of the message')
-parser.add_argument('--config_help', action='store_true',
-                    help='Print argument options for this config file')
+parser.add_argument('-V' , '--vector_len', type=int, default=1000, help='vector length')
+parser.add_argument('-A', '--aggregator_size', type=int, default=16, help='Size of the aggregator')
 
 args, remaining_args = parser.parse_known_args()
 
-if args.config_help:
-    parser.print_help()
-    exit()
 
 # Historical date to simulate.  Required even if not relevant.
 historical_date = pd.to_datetime('2023-01-01')
@@ -86,14 +76,12 @@ np.random.seed(seed)
 util.silent_mode = not args.verbose
 
 num_clients = args.num_clients
-neighborhood_size = args.neighborhood_size
 round_time = args.round_time
 num_iterations = args.num_iterations
 parallel_mode = args.parallel_mode
 debug_mode = args.debug_mode
-Dimension = args.Dimension
-commit_size = args.commit_size
-msg_name = args.msg_name
+vector_len = args.vector_len
+aggregator_size = args.aggregator_size
 
 # split_size = args.split_size
 # max_logreg_iterations = args.max_logreg_iterations
@@ -191,13 +179,9 @@ for i in range(a, b):
                               type="ClientAgent",
                               iterations=num_iterations,
                               num_clients=num_clients,
-                              neighborhood_size=neighborhood_size,
-                              # multiplier = accy_multiplier, X_train = X_train, y_train = y_train, X_test = X_test, y_test = y_test,
-                              # split_size = split_size, secret_scale = secret_scale,
                               debug_mode=debug_mode,
-                              Dimension = Dimension,
-                              commit_size=commit_size,
-                              msg_name=msg_name,
+                              vector_len = vector_len,
+                              aggregator_size=aggregator_size,
                               random_state=np.random.RandomState(
                                   seed=np.random.randint(low=0, high=2 ** 32, dtype='uint64'))))
 
@@ -220,11 +204,9 @@ agents.extend([AggregatorAgent(
     iterations=num_iterations,
     round_time=pd.Timedelta(f"{round_time}s"),
     num_clients=num_clients,
-    # neighborhood_size=neighborhood_size,
     parallel_mode=parallel_mode,
-    Dimension = Dimension,
-    commit_size=commit_size,
-    msg_name=msg_name,
+    vector_len = vector_len,
+    aggregator_size=aggregator_size,
     debug_mode=debug_mode,
 )])
 
@@ -265,10 +247,8 @@ print("Service Agent mean time per iteration")
 print(f"    Legal clients confirmation:         {results['Legal clients confirmation']:.6f}s")
 print(f"    Online clients confirmation:     {results['Online clients confirmation']:.6f}s")
 print(f"    Aggregate share reconstruction: {results['Aggregate share reconstruction']:.6f}s")
-# print(f"    Masked model generation:     {results['Masked model generation']:.6f}s")
 print(f"    Model aggregation: {results['Model aggregation']:.6f}s")
 print()
 print("Client Agent mean time per iteration")
 print(f"    Seed sharing:         {results['seed sharing']:.6f}s")
 print(f"    Masked model generation:     {results['Masked model generation']:.6f}s")
-# print(f"    Report:     {results['report']:.6f}s")
