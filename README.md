@@ -2,16 +2,6 @@
 
 Aion is a system built for privacy-preserving federated learning, where individual training weights are aggregated using secure aggregation. 
 
-## Overview
-We integrate our code into [ABIDES](https://github.com/jpmorganchase/abides-jpmc-public), an open-source highfidelity simulator designed for AI research in financial markets (e.g., stock exchanges). 
-The simulator supports tens of thousands of clients interacting with a server to facilitate transactions (and in our case to compute sums). 
-It also supports configurable pairwise network latencies.
-
-Aion protocol works by steps (i.e., round trips). 
-A step includes waiting and processing messages. 
-The waiting time is set according to the network latency distribution and a target dropout 
-
-
 
 ## Installation Instructions
 
@@ -45,20 +35,42 @@ Our program has multiple configs.
 -c [protocol name] 
 -n [number of clients (power of 2)]
 -i [number of iterations] 
--p [parallel or not] 
 ```
 Aion supports batches of clients with size power of 2, starting from 128,
 e.g., 128, 256, 512.
 
 Example command:
 ```
-python abides.py -c Aion -n 128 -i 10 -p 1 
+python abides.py -c Aion -n 128 -i 10
+```
+
+## **Comparison with Other Protocols**
+
+We have implemented several protocols for comparison:
+
+1. **SecAgg**: 
+2. **SecAgg+**: 
+3. **Flamingo**: 
+4. **Acorn**: 
+
+To run different protocols, use the following commands:
+
+```
+# Run SecAgg
+python abides.py -c secagg -n 128 -i 10
+
+# Run SecAgg+
+python abides.py -c secagg_plus -n 128 -i 10
+
+# Run Flamingo
+python abides.py -c flamingo -n 128 -i 10
+
+# Run Acorn 
+python abides.py -c acorn -n 128 -i 10
 ```
 
 
 
-## Additional Information
 
-The server waiting time is set in `util/param.py` according to a target dropout rate (1%).
-Specifically, for a target dropout rate, we set the waiting time according to the network latency (see `model/LatencyModel.py`). For each iteration, server total time = server waiting time + server computation time.
+
 
