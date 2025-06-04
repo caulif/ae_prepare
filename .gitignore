@@ -10,4 +10,7 @@ note/
 note/*
 *.xlsx
 
-
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
