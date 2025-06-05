@@ -72,7 +72,7 @@ python abides.py -c flamingo -n 128 -i 10 -A 8
 
 ## **ACORN Protocol**
 
-ACORN is another privacy-preserving federated learning protocol implemented for comparison. The ACORN protocol is only supported on Linux and MacOS systems. To use ACORN, you need to install an additional package:
+ACORN is another protocol implemented for comparison. To use ACORN, you need to install an additional package(only supported on Linux and MacOS systems):
 
 ```
 pip install fastecdsa
