@@ -2,6 +2,11 @@
 
 Aion is a system built for privacy-preserving federated learning, where individual training weights are aggregated using secure aggregation. 
 
+## System Requirements
+
+- Operating System: Linux or Windows
+- Python 3.8 or higher
+- Anaconda (recommended)
 
 ## Installation Instructions
 
@@ -18,8 +23,6 @@ Use pip to install required packages.
 ```
 pip install -r requirements.txt
 ```
-
-
 
 
 ## **Secure Aggregation**
@@ -43,40 +46,39 @@ e.g., 128, 256, 512.
 
 Example command:
 ```
-python abides.py -c aion -n 128 -i 10 -A 8
+python abides.py -c aion -n 128 -A 8 -i 10 
 ```
 
 ## **Comparison with Other Protocols**
 
 We have implemented several protocols for comparison:
 
-1. **SecAgg**: 
-2. **SecAgg+**: 
-3. **Flamingo**: 
-4. **ACORN**: 
+1. **SecAgg**
+2. **SecAgg+**
+3. **Flamingo**
 
 To run different protocols, use the following commands:
-Note: If you want to run the ACORN protocol, you need to install an additional package (only supported on Linux and MacOS):
-```
-pip install fastecdsa
-```
-
 
 ```
 # Run SecAgg
-python abides.py -c secagg -n 128 -i 10 -A 8
+python abides.py -c secagg -n 128 -i 10 
 
 # Run SecAgg+
 python abides.py -c secagg_plus -n 128 -i 10 -A 8
 
 # Run Flamingo
 python abides.py -c flamingo -n 128 -i 10 -A 8
-
-# Run ACORN 
-python abides.py -c acorn -n 128 -i 10 -A 8
 ```
 
+## **ACORN Protocol**
 
+ACORN is another privacy-preserving federated learning protocol implemented for comparison. The ACORN protocol is only supported on Linux and MacOS systems. To use ACORN, you need to install an additional package:
 
+```
+pip install fastecdsa
+```
 
-
+To run ACORN:
+```
+python abides.py -c acorn -n 128 -i 10 -A 8
+```
