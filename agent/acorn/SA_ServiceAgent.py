@@ -78,7 +78,7 @@ class SA_ServiceAgent(Agent):
         self.vector_dtype = 'uint32'
         self.vec_sum_partial = np.zeros(self.vector_len, dtype=self.vector_dtype)
         self.prime = ecchash.n
-        # 添加秘密分享使用的大素数
+        # Add large prime for secret sharing
         self.secret_sharing_prime = param.SECRET_SHARING_PRIME
 
         self.system_sk = None
@@ -138,30 +138,30 @@ class SA_ServiceAgent(Agent):
         self.recon_index = {}
         self.recv_recon_index = {}
         
-        # 初始化zkp相关参数
+        # Initialize zkp related parameters
         self.CURVE = secp256k1
         self.p = self.CURVE.q
-        self.n = 32  # 增加范围大小到32位
+        self.n = 32  # Increase range size to 32 bits
         self.seeds = [b'fixed_seed_0', b'fixed_seed_1', b'fixed_seed_2', 
                      b'fixed_seed_3', b'fixed_seed_4', b'fixed_seed_5',
-                     b'fixed_seed_6']  # 使用固定种子
+                     b'fixed_seed_6']  # Use fixed seeds
         
-        # 生成zkp所需的生成元
+        # Generate generators needed for zkp
         self.gs = [elliptic_hash(str(i).encode() + self.seeds[0], self.CURVE) for i in range(self.n)]
         self.hs = [elliptic_hash(str(i).encode() + self.seeds[1], self.CURVE) for i in range(self.n)]
         self.g = elliptic_hash(self.seeds[2], self.CURVE)
         self.h = elliptic_hash(self.seeds[3], self.CURVE)
         self.u = elliptic_hash(self.seeds[4], self.CURVE)
         
-        # 存储范围证明
+        # Store range proofs
         self.range_proofs = {}
         self.range_proof_commitments = {}
        
-        # 存储内积证明
+        # Store inner product proofs
         self.inner_product_proofs = {}
         self.inner_product_commitments = {}
         
-        # 初始化内积证明验证器
+        # Initialize inner product proof verifier
         self.inner_product_verifier = None
 
         # Track the current iteration and round of the protocol.
@@ -287,7 +287,7 @@ class SA_ServiceAgent(Agent):
                 self.recv_backup_shares_ai[sender_id] = msg.body['backup_shares_ai']
                 self.recv_backup_shares_mi[sender_id] = msg.body['backup_shares_mi']
                 
-                # 存储范围证明
+                # Store range proofs
                 if 'range_proof' in msg.body and 'range_proof_commitment' in msg.body:
                     self.range_proofs[sender_id] = msg.body['range_proof']
                     self.range_proof_commitments[sender_id] = msg.body['range_proof_commitment']
@@ -502,7 +502,7 @@ class SA_ServiceAgent(Agent):
         self.backup_shares_mi = self.recv_backup_shares_mi
         self.recv_backup_shares_mi = {}
         
-        # 读取范围证明
+        # Read range proofs
         self.range_proofs = self.range_proofs
         self.range_proof_commitments = self.range_proof_commitments
 
@@ -556,10 +556,10 @@ class SA_ServiceAgent(Agent):
 
         self.forward_signatures_clear_pool()
 
-        # 验证范围证明
+        # Verify range proofs
         self._verify_range_proofs()
         
-        # 验证内积证明
+        # Verify inner product proofs
         if len(self.inner_product_proofs) > 0:
             self._verify_inner_product_proofs()
 
@@ -923,9 +923,9 @@ class SA_ServiceAgent(Agent):
 
     def _verify_inner_product_proofs(self):
         """
-        验证所有客户端的内积证明
+        Verify inner product proofs for all clients
         """
-        # 初始化内积证明验证器(如果还没有初始化)
+        # Initialize inner product proof verifier (if not already initialized)
         if self.inner_product_verifier is None:
             from zkp.innerproduct.inner_product_verifier import InnerProductVerifier
             self.inner_product_verifier = InnerProductVerifier(self.g, self.h, self.gs, self.hs, self.u, self.CURVE)

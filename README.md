@@ -26,6 +26,7 @@ pip install -r requirements.txt
 
 First enter into folder `pki_files`, and run
 ```
+cd pki_files
 python setup_pki.py
 ```
 
@@ -35,13 +36,14 @@ Our program has multiple configs.
 -c [protocol name] 
 -n [number of clients (power of 2)]
 -i [number of iterations] 
+-A [number of aggregators]
 ```
 Aion supports batches of clients with size power of 2, starting from 128,
 e.g., 128, 256, 512.
 
 Example command:
 ```
-python abides.py -c Aion -n 128 -i 10
+python abides.py -c aion -n 128 -i 10 -A 8
 ```
 
 ## **Comparison with Other Protocols**
@@ -51,24 +53,28 @@ We have implemented several protocols for comparison:
 1. **SecAgg**: 
 2. **SecAgg+**: 
 3. **Flamingo**: 
-4. **Acorn**: 
+4. **ACORN**: 
 
 To run different protocols, use the following commands:
+Note: If you want to run the ACORN protocol, you need to install an additional package (only supported on Linux and MacOS):
+```
+pip install fastecdsa
+```
+
 
 ```
 # Run SecAgg
-python abides.py -c secagg -n 128 -i 10
+python abides.py -c secagg -n 128 -i 10 -A 8
 
 # Run SecAgg+
-python abides.py -c secagg_plus -n 128 -i 10
+python abides.py -c secagg_plus -n 128 -i 10 -A 8
 
 # Run Flamingo
-python abides.py -c flamingo -n 128 -i 10
+python abides.py -c flamingo -n 128 -i 10 -A 8
 
-# Run Acorn 
-python abides.py -c acorn -n 128 -i 10
+# Run ACORN 
+python abides.py -c acorn -n 128 -i 10 -A 8
 ```
-
 
 
 

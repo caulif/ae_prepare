@@ -34,7 +34,7 @@ parser.add_argument('-l', '--log_dir', default=None,
                     help='Log directory name (default: unix timestamp at program start)')
 parser.add_argument('-n', '--num_clients', type=int, default=5,
                     help='Number of clients for the secure multiparty protocol)')
-parser.add_argument('-o', '--neighborhood_size', type=int, default=1,
+parser.add_argument('-o', '--neighborhood_size', type=int, default=8,
                     help='Number of neighbors a client has (should only enter the multiplication factor of log(n))')
 parser.add_argument('--round_time', type=int, default=10,
                     help='Fixed time the server waits for one round')
@@ -48,7 +48,7 @@ parser.add_argument('-d', '--debug_mode', type=bool, default=False,
                     help='print debug info')
 parser.add_argument('--vector_len', type=int, default=10000,
                     help='Length of the vector for each client')
-parser.add_argument('--committee_size', type=int, default=8,
+parser.add_argument('-A', '--committee_size', type=int, default=8,
                     help='Number of committee members for decryption')
 parser.add_argument('--config_help', action='store_true',
                     help='Print argument options for this config file')

@@ -30,16 +30,16 @@ class VSS:
         Args:
             prime: Prime number for the field. If None, a default value will be used.
         """
-        # 使用传入的 prime 作为 p
+        # Use the provided prime as p
         self.p = prime if prime is not None else sympy.randprime(2 ** (2048 - 1), 2 ** 2048)
         # q = (p-1)/2
         self.q = (self.p - 1) // 2
-        # 生成安全的生成元
+        # Generate secure generator
         self.g = self._find_generator()
         self.h = self._find_generator(different_from=self.g)
         
     def _find_generator(self, different_from=None):
-        """生成安全的生成元"""
+        """Generate a secure generator"""
         while True:
             x = random.randrange(2, self.p - 1)
             g = gmpy2.powmod(x, (self.p - 1) // self.q, self.p)
@@ -47,14 +47,14 @@ class VSS:
                 return g
         
     def _evaluate_polynomial(self, coefficients, x, prime):
-        """计算多项式在点x处的值，使用霍纳法则优化"""
+        """Calculate polynomial value at point x using Horner's method"""
         result = coefficients[-1]
         for coef in reversed(coefficients[:-1]):
             result = (result * x + coef) % prime
         return result
 
     def _fast_mod_pow(self, base, exp, mod):
-        """使用快速模幂算法"""
+        """Use fast modular exponentiation algorithm"""
         result = 1
         base = base % mod
         while exp > 0:
@@ -85,37 +85,37 @@ class VSS:
             if prime is None:
                 raise ValueError("Error! Secret is too long for share calculation!")
         self.q = prime
-        # 确保secret在q范围内
+        # Ensure secret is within q range
         secret = secret % self.q
         
-        # 使用固定的系数，而不是随机系数
-        f_coeffs = [secret]  # 第一个系数是secret
-        r_coeffs = [1]      # 第一个r系数固定为1
+        # Use fixed coefficients instead of random ones
+        f_coeffs = [secret]  # First coefficient is secret
+        r_coeffs = [1]      # First r coefficient is fixed as 1
         
-        # 使用固定的系数
+        # Use fixed coefficients
         for i in range(threshold - 1):
-            f_coeffs.append(i + 1)  # 使用递增的固定系数
-            r_coeffs.append(i + 2)  # 使用递增的固定系数
+            f_coeffs.append(i + 1)  # Use incrementing fixed coefficients
+            r_coeffs.append(i + 2)  # Use incrementing fixed coefficients
         
-        # 计算Pedersen承诺 C_j = g^{a_j} h^{b_j} mod p
+        # Calculate Pedersen commitments C_j = g^{a_j} h^{b_j} mod p
         commitments = []
         for j in range(threshold):
             c = (gmpy2.powmod(self.g, f_coeffs[j], self.p) * 
                  gmpy2.powmod(self.h, r_coeffs[j], self.p)) % self.p
             commitments.append(c)
         
-        # 生成份额 (i, f(i), r(i))，都在q上
+        # Generate shares (i, f(i), r(i)), all in q
         shares = []
         for i in range(1, num_shares + 1):
-            # 计算多项式在点i处的值
+            # Calculate polynomial value at point i
             f_i = 0
             r_i = 0
             
-            # 计算f(i)
+            # Calculate f(i)
             for j, coef in enumerate(f_coeffs):
                 f_i = (f_i + coef * gmpy2.powmod(i, j, self.q)) % self.q
             
-            # 计算r(i)
+            # Calculate r(i)
             for j, coef in enumerate(r_coeffs):
                 r_i = (r_i + coef * gmpy2.powmod(i, j, self.q)) % self.q
             
@@ -140,21 +140,21 @@ class VSS:
                 return False
             x, f_x, r_x = share
             
-            # 检查输入参数
+            # Check input parameters
             if not isinstance(x, int) or not isinstance(f_x, int) or not isinstance(r_x, int):
                 return False
                 
             if not isinstance(commitments, list) or not commitments:
                 return False
             
-            # 确保值在q范围内
+            # Ensure values are within q range
             f_x = f_x % self.q
             r_x = r_x % self.q
             
-            # 计算 g^f(x) * h^r(x) mod p
+            # Calculate g^f(x) * h^r(x) mod p
             left = (gmpy2.powmod(self.g, f_x, self.p) * gmpy2.powmod(self.h, r_x, self.p)) % self.p
             
-            # 计算 ∏(C_j^x^j) mod p
+            # Calculate ∏(C_j^x^j) mod p
             right = 1
             for j, Cj in enumerate(commitments):
                 x_pow_j = gmpy2.powmod(x, j, self.q)
@@ -167,12 +167,12 @@ class VSS:
 
     def verify_shares_batch(self, shares, commitments, prime):
         """
-        批量验证多个份额，利用Pedersen承诺的同态性质。
+        Batch verify multiple shares using Pedersen commitment homomorphism.
         
         Args:
-            shares: 份额列表，每个份额格式为 (share_index, share_value, blinding_value)
-            commitments: 承诺列表
-            prime: 素数
+            shares: List of shares in format (share_index, share_value, blinding_value)
+            commitments: List of commitments
+            prime: Prime number
             
         Returns:
             is_valid: True if all shares are valid, False otherwise
@@ -181,28 +181,28 @@ class VSS:
             if not shares or not commitments:
                 return False
                 
-            # 计算所有份额的承诺
+            # Calculate commitment for all shares
             C_total = 1
             for x, f_x, r_x in shares:
-                # 确保值在q范围内
+                # Ensure values are within q range
                 f_x = f_x % self.q
                 r_x = r_x % self.q
-                # 计算单个份额的承诺
+                # Calculate commitment for single share
                 C_i = (gmpy2.powmod(self.g, f_x, self.p) * gmpy2.powmod(self.h, r_x, self.p)) % self.p
-                # 累乘所有承诺
+                # Multiply all commitments
                 C_total = (C_total * C_i) % self.p
             
-            # 计算所有份额值的和
+            # Calculate sum of all share values
             sum_f = 0
             sum_r = 0
             for _, f_x, r_x in shares:
                 sum_f = (sum_f + f_x) % self.q
                 sum_r = (sum_r + r_x) % self.q
             
-            # 使用同态性质计算总承诺
+            # Calculate total commitment using homomorphism
             C_sum = (gmpy2.powmod(self.g, sum_f, self.p) * gmpy2.powmod(self.h, sum_r, self.p)) % self.p
             
-            # 验证两个结果是否相等
+            # Verify if two results are equal
             return C_total == C_sum
             
         except Exception as e:
@@ -224,28 +224,28 @@ class VSS:
             ValueError: If shares list is empty or invalid format.
         """
         if len(shares) < 2:
-            raise ValueError("至少需要2个份额才能重构秘密")
+            raise ValueError("At least 2 shares are required to reconstruct the secret")
         
         self.q = prime
         
-        # 处理嵌套列表格式
+        # Handle nested list format
         if isinstance(shares[0], list):
             shares = [share[0] for share in shares]
         
-        # 兼容2元组和3元组份额
+        # Compatible with 2-tuple and 3-tuple shares
         normalized_shares = []
         for share in shares:
             if len(share) == 2:
-                # 自动补0作为blinding
+                # Automatically add 0 as blinding
                 share = (share[0], share[1], 0)
             elif len(share) != 3:
-                raise ValueError("Invalid share format: must be (index, value) 或 (index, value, blinding)")
-            # 修改类型检查，允许mpz类型
+                raise ValueError("Invalid share format: must be (index, value) or (index, value, blinding)")
+            # Modify type check to allow mpz type
             if not all(isinstance(x, (int, gmpy2.mpz)) for x in share):
                 raise ValueError("Share components must be integers or mpz")
             normalized_shares.append(share)
         
-        # 使用拉格朗日插值重构秘密（在q上）
+        # Use Lagrange interpolation to reconstruct secret (in q)
         secret = 0
         for i, (x_i, y_i, _) in enumerate(normalized_shares):
             numerator = denominator = 1
@@ -259,24 +259,24 @@ class VSS:
                 secret = (secret + (y_i * lagrange_coef) % self.q) % self.q
             except ValueError:
                 continue
-        return int(secret)  # 确保返回Python原生整数
+        return int(secret)  # Ensure return native Python integer
 
     def reconstruct_batch(self, shares_list, prime):
         """
-        批量恢复多个秘密。
+        Batch reconstruct multiple secrets.
         
         Args:
-            shares_list: 份额列表的列表，每个内部列表包含格式为 [(share_index, share_value, blinding_value)] 的份额。
-            prime: 素数。
+            shares_list: List of share lists, each inner list contains shares in format [(share_index, share_value, blinding_value)].
+            prime: Prime number.
             
         Returns:
-            secrets: 恢复的秘密列表。
+            secrets: List of reconstructed secrets.
             
         Raises:
-            ValueError: 如果份额列表为空或格式无效。
+            ValueError: If shares list is empty or invalid format.
         """
         if not shares_list:
-            raise ValueError("份额列表不能为空")
+            raise ValueError("Shares list cannot be empty")
             
         secrets = []
         for shares in shares_list:
@@ -284,31 +284,31 @@ class VSS:
                 secret = self.reconstruct(shares, prime)
                 secrets.append(secret)
             except ValueError as e:
-                print(f"警告：恢复秘密时出错: {e}")
+                print(f"Warning: Error reconstructing secret: {e}")
                 secrets.append(None)
                 
         return secrets
 
     def reconstruct_batch_fast(self, shares_list, prime):
         """
-        快速批量恢复多个秘密。
-        使用预计算和矩阵运算来优化性能。
+        Fast batch reconstruction of multiple secrets.
+        Uses precomputation and matrix operations to optimize performance.
         
         Args:
-            shares_list: 份额列表的列表，每个内部列表包含格式为 [(share_index, share_value, blinding_value)] 的份额。
-            prime: 素数。
+            shares_list: List of share lists, each inner list contains shares in format [(share_index, share_value, blinding_value)].
+            prime: Prime number.
             
         Returns:
-            secrets: 恢复的秘密列表。
+            secrets: List of reconstructed secrets.
         """
         if not shares_list:
             return []
             
         secrets = []
-        # 获取第一组份额的x值
+        # Get x values from first share set
         x_values = [x for x, _, _ in shares_list[0]]
         
-        # 预计算所有可能的拉格朗日系数
+        # Precompute all possible Lagrange coefficients
         lagrange_coeffs = []
         for i, x_i in enumerate(x_values):
             numerator = denominator = 1
@@ -323,16 +323,16 @@ class VSS:
             except ValueError:
                 lagrange_coeffs.append(0)
         
-        # 批量计算所有秘密
+        # Batch calculate all secrets
         for shares in shares_list:
             try:
-                # 使用预计算的拉格朗日系数
+                # Use precomputed Lagrange coefficients
                 secret = 0
                 for i, (_, y_i, _) in enumerate(shares):
                     secret = (secret + (y_i * lagrange_coeffs[i]) % self.q) % self.q
                 secrets.append(secret)
             except Exception as e:
-                print(f"警告：恢复秘密时出错: {e}")
+                print(f"Warning: Error reconstructing secret: {e}")
                 secrets.append(None)
                 
         return secrets

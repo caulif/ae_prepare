@@ -9,7 +9,6 @@ scikit_learn==1.2.2
 six==1.12.0
 sympy==1.4
 utilitybelt==0.2.6
-fastecdsa
 libnum
 joblib==1.2.0
 jsons

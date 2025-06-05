@@ -36,9 +36,9 @@ parser.add_argument('--max_input', type=int, default=10000,
                     help='Maximum input of each client'),
 parser.add_argument('-n', '--num_clients', type=int, default=5,
                     help='Number of clients for the secure multiparty protocol)')
-parser.add_argument('--num_neighbors', type=int, default=-1,
+parser.add_argument('-A', '--num_neighbors', type=int, default=8,
                     help='Number of neighbors a client has')
-parser.add_argument('--neighbor_threshold', type=int, default=-1,
+parser.add_argument('--neighbor_threshold', type=int, default=2,
                     help='The threshold for each individual client')
 parser.add_argument('--round_time', type=int, default=10,
                     help='Fixed time the server waits for one round')

@@ -73,7 +73,7 @@ class SA_ClientAgent(Agent):
         self.public_key = mykey.pointQ
          
         self.prime = ecchash.n
-        # 添加秘密分享使用的大素数
+        # Add large prime for secret sharing
         self.secret_sharing_prime = param.SECRET_SHARING_PRIME
 
         # Record the total number of clients participating in the protocol and the number of subgraphs.
@@ -118,15 +118,15 @@ class SA_ClientAgent(Agent):
         self.current_iteration = 1
         self.current_base = 0
         
-        # 初始化zkp相关参数
+        # Initialize zkp related parameters
         self.CURVE = secp256k1
         self.p = self.CURVE.q
-        self.n = 32  # 增加范围大小到32位
+        self.n = 32  # Increase range size to 32 bits
         self.seeds = [b'fixed_seed_0', b'fixed_seed_1', b'fixed_seed_2', 
                      b'fixed_seed_3', b'fixed_seed_4', b'fixed_seed_5',
-                     b'fixed_seed_6']  # 使用固定种子
+                     b'fixed_seed_6']  # Use fixed seeds
         
-        # 生成zkp所需的生成元
+        # Generate generators for zkp
         self.gs = [elliptic_hash(str(i).encode() + self.seeds[0], self.CURVE) for i in range(self.n)]
         self.hs = [elliptic_hash(str(i).encode() + self.seeds[1], self.CURVE) for i in range(self.n)]
         self.g = elliptic_hash(self.seeds[2], self.CURVE)
@@ -134,15 +134,15 @@ class SA_ClientAgent(Agent):
         self.u = elliptic_hash(self.seeds[4], self.CURVE)
         self.gamma = mod_hash(self.seeds[5], self.p)
         
-        # 存储范围证明
+        # Store range proof
         self.range_proof = None
         self.range_proof_commitment = None
         
-        # 初始化内积证明相关参数
+        # Initialize inner product proof related parameters
         self.inner_product_proof = None
         self.inner_product_commitment = None
         
-        # 初始化内积证明生成器和验证器
+        # Initialize inner product proof prover and verifier
         self.inner_product_prover = None
         self.inner_product_verifier = None
 
@@ -295,8 +295,8 @@ class SA_ClientAgent(Agent):
                                       "sender": self.id,
                                       "backup_shares_ai": ai_shares,  # a list of points
                                       "backup_shares_mi": mi_shares,  # a list of points
-                                      "range_proof": self.range_proof,  # 添加范围证明
-                                      "range_proof_commitment": self.range_proof_commitment,  # 添加范围证明承诺
+                                      "range_proof": self.range_proof,  # Add range proof
+                                      "range_proof_commitment": self.range_proof_commitment,  # Add range proof commitment
                                       }),
                              tag="choice_to_server")
             
@@ -552,77 +552,77 @@ class SA_ClientAgent(Agent):
 
     def _generate_inner_product_proof(self, values):
         """
-        生成内积证明，优化范围证明过程
+        Generate inner product proof, optimize range proof process
         
-        参数:
-        values -- 需要证明的值列表
+        Parameters:
+        values -- List of values to prove
         
-        返回:
-        proof -- 内积证明
-        commitment -- 承诺
+        Returns:
+        proof -- Inner product proof
+        commitment -- Commitment
         """
-        # 将值转换为ModP类型
+        # Convert values to ModP type
         vs = [ModP(v, self.p) for v in values]
         
-        # 使用内积证明生成器
+        # Use inner product proof prover
         if self.inner_product_prover is None:
-            # 导入内积证明生成器
+            # Import inner product proof prover
             from zkp.innerproduct.inner_product_prover import InnerProductProver
             self.inner_product_prover = InnerProductProver(self.g, self.h, self.gs[:len(vs)], self.hs[:len(vs)], self.u, self.CURVE, self.seeds[6])
         
-        # 创建承诺
+        # Create commitment
         gamma = mod_hash(self.seeds[5], self.p)
         V = commitment(self.g, self.h, vs[0], gamma)
         self.inner_product_commitment = V
         
-        # 生成内积证明
+        # Generate inner product proof
         self.inner_product_proof = self.inner_product_prover.prove(vs, gamma)
         
         return self.inner_product_proof, self.inner_product_commitment
     
     def _verify_inner_product_proof(self, proof, commitment):
         """
-        验证内积证明
+        Verify inner product proof
         
-        参数:
-        proof -- 内积证明
-        commitment -- 承诺
+        Parameters:
+        proof -- Inner product proof
+        commitment -- Commitment
         
-        返回:
-        bool -- 验证结果
+        Returns:
+        bool -- Verification result
         """
         if self.inner_product_verifier is None:
-            # 导入内积证明验证器
+            # Import inner product proof verifier
             from zkp.innerproduct.inner_product_verifier import InnerProductVerifier
             self.inner_product_verifier = InnerProductVerifier(self.g, self.h, self.gs, self.hs, self.u, self.CURVE)
         
-        # 验证内积证明
+        # Verify inner product proof
         return self.inner_product_verifier.verify(proof, commitment)
     
     def _generate_optimized_range_proof(self, value):
         """
-        使用内积证明优化的范围证明
+        Use inner product proof to optimize range proof
         
-        参数:
-        value -- 需要证明的值
+        Parameters:
+        value -- Value to prove
         
-        返回:
-        proof -- 优化后的范围证明
-        commitment -- 承诺
+        Returns:
+        proof -- Optimized range proof
+        commitment -- Commitment
         """
-        # 检查值是否在范围内
+        # Check if value is within range
         max_value = (1 << self.n) - 1
         if value > max_value:
             value = value & max_value
         
-        # 将值转换为比特表示
+        # Convert value to bit representation
         bits = []
         temp_value = value
         for i in range(self.n):
             bits.append(temp_value & 1)
             temp_value >>= 1
         
-        # 使用内积证明生成更高效的范围证明
+        # Use inner product proof to generate more efficient range proof
         return self._generate_inner_product_proof(bits)
 
     def _generate_range_proof(self, value):

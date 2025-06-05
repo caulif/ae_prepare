@@ -39,7 +39,7 @@ parser.add_argument('--vector_len', type=int, default=10000,
                     help='Length of the vector for each client'),
 parser.add_argument('-n', '--num_clients', type=int, default=5,
                     help='Number of clients for the secure multiparty protocol)')
-parser.add_argument('--num_neighbors', type=int, default=8,
+parser.add_argument('-A', '--num_neighbors', type=int, default=8,
                     help='Number of neighbors a client has')
 parser.add_argument('--neighbor_threshold', type=int, default=2,
                     help='The threshold for each individual client')

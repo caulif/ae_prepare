@@ -124,6 +124,14 @@ class SA_ClientAgent(Agent):
         self._seed_sharing_verify_time = 0
         self._seed_sharing_verified_count = 0
         
+        
+
+        # Initialize seed sharing state
+        self.seed_sharing_state = {
+            'shares': {},
+            'commitments': {},
+            'verified': False
+        }
 
     def kernelStarting(self, startTime):
         """
@@ -132,15 +140,12 @@ class SA_ClientAgent(Agent):
         Args:
             startTime (pandas.Timestamp): The start time of the simulation.
         """
-        
-
-        # 动态导入 AggregatorAgent 以避免循环导入
+        # Dynamically import AggregatorAgent to avoid circular imports
         from agent.Aion.SA_Aggregator import SA_AggregatorAgent as AggregatorAgent
         self.AggregatorAgentID = self.kernel.findAgentByType(AggregatorAgent)
-
+        
         self.setComputationDelay(0)
         
-        # 初始化 seed sharing 状态
         self.kernel.custom_state['seed sharing'] = 0
 
         super().kernelStarting(startTime +
@@ -172,46 +177,33 @@ class SA_ClientAgent(Agent):
         self.report_time = time.time() - self.report_time
 
 
-    def BFT_report(self, sign_message):
-        """使用BFT协议进行报告"""
-        # 准备阶段
-        prepare_msg = self.bft_protocol.prepare(sign_message)
+    def report_with_bft(self, currentTime):
+        """Use BFT protocol for reporting"""
+        # Preparation phase
+        message = self.prepare_report_message()
         
-        # 签名消息
-        msg_to_sign = dill.dumps(sign_message.body)
-        hash_container = SHA256.new(msg_to_sign)
-        signer = DSS.new(self.key, 'fips-186-3')
-        signature = signer.sign(hash_container)
+        # Sign message
+        signature = self._sign_message(message)
         
-        # 创建BFT消息
-        bft_msg = BFTMessage(
-            type='prepare',
-            value=sign_message,
-            phase=BFTPhase.PREPARE,
-            node_id=self.id,
+        # Create BFT message
+        bft_message = BFTMessage(
+            sender=self.id,
+            message_type=BFTMessageType.PREPARE,
+            content=message,
             signature=signature
         )
         
-        # 根据消息类型确定BFT消息类型
-        bft_msg_type = "BFT_SIGN_LEGAL"
-        if sign_message.body['msg'] == "ONLINE_CLIENTS":
-            bft_msg_type = "BFT_SIGN_ONLINE"
-        elif sign_message.body['msg'] == "FINAL_SUM":
-            bft_msg_type = "BFT_SIGN_FINAL"
-        
-        # 发送给聚合器
-        self.sendMessage(
-            self.AggregatorAgentID,
-            Message({
-                "msg": bft_msg_type,
-                "iteration": self.current_iteration,
-                "sender": self.id,
-                "bft_message": bft_msg,
-                "sign_message": sign_message
-            }),
-            tag="comm_sign_client",
-           
-        )
+        # Determine BFT message type based on message type
+        if message.get('type') == 'VECTOR':
+            bft_message.message_type = BFTMessageType.PREPARE
+        elif message.get('type') == 'SIGN':
+            bft_message.message_type = BFTMessageType.COMMIT
+            
+        # Send to aggregator
+        self.sendMessage(self.AggregatorAgentID,
+                        Message({"msg": "BFT_SIGN",
+                                "bft_message": bft_message,
+                                "sender": self.id}))
 
     def receiveMessage(self, currentTime, msg):
         """

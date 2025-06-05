@@ -155,28 +155,28 @@ class SA_AggregatorAgent(Agent):
         self._seed_sharing_verify_time = 0
         self._seed_sharing_verified_count = 0
 
-        # 初始化BFT协议
+        # Initialize BFT protocol
         self.bft_protocol = BFTProtocol(
             node_id=self.id,
             total_nodes=self.num_clients,
             f=self.num_clients // 3
         )
         
-        # BFT相关状态
+        # BFT related states
         self.bft_messages = {}
         self.bft_responses = {}
         self.bft_consensus = {}
 
-        # 初始化视图切换和检查点协议
+        # Initialize view change and checkpoint protocols
         self.view_protocol = ViewChangeProtocol(
             node_id=self.id,
             total_nodes=self.num_clients
         )
         self.checkpoint_protocol = CheckpointProtocol(node_id=self.id)
         
-        # 视图切换相关状态
+        # View change related states
         self.view_change_messages = {}
-        self.view_change_timeout = 5  # 秒
+        self.view_change_timeout = 5  # seconds
 
     # Simulate lifecycle message
     def kernelStarting(self, startTime):
@@ -193,7 +193,7 @@ class SA_AggregatorAgent(Agent):
         self.kernel.custom_state['Aggregate share reconstruction'] = 0
         self.kernel.custom_state['Model aggregation'] = 0
         
-        # 动态导入 ClientAgent 以避免循环导入
+        # Dynamically import ClientAgent to avoid circular imports
         from agent.Aion.SA_ClientAgent import SA_ClientAgent as ClientAgent
         self.ClientAgent = ClientAgent
         
@@ -244,21 +244,21 @@ class SA_AggregatorAgent(Agent):
             self.recv_committee_shares_sum[sender_id] = msg.body['sum_shares']
 
         elif msg.body["msg"] == "BFT_SIGN":
-            # 处理BFT消息
+            # Handle BFT messages
             bft_msg = msg.body['bft_message']
             self.bft_messages[msg.body['sender']] = bft_msg
             
-            # 处理消息并可能产生响应
+            # Process message and possibly generate response
             response = self.bft_protocol.handle_message(bft_msg)
             if response:
                 self.bft_responses[msg.body['sender']] = response
                 
         elif msg.body["msg"] == "BFT_RESPONSE":
-            # 处理BFT响应
+            # Handle BFT response
             bft_msg = msg.body['bft_message']
             self.bft_responses[msg.body['sender']] = bft_msg
             
-            # 检查是否达成共识
+            # Check if consensus is reached
             if self._check_consensus():
                 self._handle_consensus()
                 
@@ -684,38 +684,38 @@ class SA_AggregatorAgent(Agent):
         shared_mask = msg.body["shared_mask"]
         commitments = msg.body.get("commitments", None)
         
-        # 存储份额和承诺
+        # Store shares and commitments
         self.recv_shared_masks[sender_id] = shared_mask
         if commitments is not None:
             self.mask_commitments[sender_id] = commitments
             
-        # 检查是否收到足够的份额
+        # Check if enough shares are received
         if len(self.recv_shared_masks) >= self.committee_threshold:
-            # 将收到的所有份额相加
+            # Sum all received shares
             combined_share = None
             for share in self.recv_shared_masks.values():
                 if combined_share is None:
                     combined_share = share
                 else:
-                    # 将对应位置的值相加，保持索引和盲化值
+                    # Sum corresponding values while keeping index and blind value
                     combined_share = (
-                        combined_share[0],  # 保持索引不变
-                        (combined_share[1] + share[1]) % self.prime,  # 份额值相加
-                        (combined_share[2] + share[2]) % self.prime   # 盲化值相加
+                        combined_share[0],  # Keep index unchanged
+                        (combined_share[1] + share[1]) % self.prime,  # Sum share values
+                        (combined_share[2] + share[2]) % self.prime   # Sum blind values
                     )
             
-            # 发送相加后的份额给服务器
+            # Send summed shares to server
             self.sendMessage(self.AggregatorAgentID,
                           Message({"msg": "hprf_SUM_SHARES",
                                    "iteration": self.current_iteration,
                                    "sender": self.id,
-                                   "sum_shares": combined_share,  # 直接发送完整的份额元组
+                                   "sum_shares": combined_share,  # Directly send full share tuple
                                    }),
                           tag="comm_secret_sharing")
             
             self.agent_print(f"Committee member {self.id} sent combined share to server")
             
-            # 清空接收到的份额
+            # Clear received shares
             self.recv_shared_masks = {}
             self.mask_commitments = {}
 
@@ -734,7 +734,7 @@ class SA_AggregatorAgent(Agent):
         self.mask_commitments[sender_id] = commitments
         self.agent_print(f"Received mask commitments from client {sender_id}")
         
-        # 检查是否已经选择了客户端
+        # Check if client selection has been completed
         if self.selected_indices is None:
             return
             

@@ -91,8 +91,6 @@ aggregator_size = args.aggregator_size
 # collusion = args.collusion
 
 
-print("Silent mode: {}".format(util.silent_mode))
-print("Configuration seed: {}\n".format(seed))
 
 # Since the simulator often pulls historical data, we use a real-world
 # nanosecond timestamp (pandas.Timestamp) for our discrete time "steps",
