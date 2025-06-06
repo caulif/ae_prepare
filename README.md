@@ -48,7 +48,7 @@ Example command:
 python abides.py -c aion -n 128 -A 8 -i 10 
 ```
 
-## **Comparison with Other Protocols**
+## **Comparison with Other Protocols (Optional)**
 
 We have implemented several protocols for comparison:
 
@@ -69,7 +69,7 @@ python abides.py -c secagg_plus -n 128 -i 10 -A 8
 python abides.py -c flamingo -n 128 -i 10 -A 8
 ```
 
-## **ACORN Protocol**
+## **ACORN Protocol (Optional)**
 
 ACORN is another protocol implemented for comparison. To use ACORN, you need to install an additional package (only supported on Linux and MacOS systems):
 
