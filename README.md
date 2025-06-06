@@ -6,7 +6,6 @@ Aion is a system built for privacy-preserving federated learning, where individu
 
 - Operating System: Linux or Windows
 - Python 3.8 or higher
-- Anaconda (recommended)
 
 ## Installation Instructions
 
