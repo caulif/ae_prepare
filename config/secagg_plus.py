@@ -236,7 +236,7 @@ model_args = { 'connected'   : True,
                # All in NYC.
                # Only matters for evaluating "real world" protocol duration,
                # not for accuracy, collusion, or reconstruction.
-               'min_latency' : np.random.uniform(low = 21000, high = 53000000, size = pairwise),
+               'min_latency' : np.random.uniform(low = 10000000, high = 100000000, size = pairwise),
                'jitter'      : 0.3,
                'jitter_clip' : 0.05,
                'jitter_unit' : 5,
