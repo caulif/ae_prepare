@@ -71,7 +71,7 @@ python abides.py -c flamingo -n 128 -i 10 -A 8
 
 ## **ACORN Protocol**
 
-ACORN is another protocol implemented for comparison. To use ACORN, you need to install an additional package(only supported on Linux and MacOS systems):
+ACORN is another protocol implemented for comparison. To use ACORN, you need to install an additional package (only supported on Linux and MacOS systems):
 
 ```
 pip install fastecdsa
